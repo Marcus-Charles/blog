@@ -17,9 +17,10 @@ window.siteConfig = {
   // 在 GitHub Pages 的项目站点下部署时，如果是 https://用户名.github.io/仓库名/，
   // 这里写 '/仓库名'；如果是 https://用户名.github.io/ 这种用户站点，保持空字符串。
   // 使用自定义域名时也保持空字符串。
-  basePath: '',
+  // 仓库名是 blog，GitHub Pages 的项目站点跑在 /blog/ 下，所以这里必须写 '/blog'
+  basePath: '/blog',
   // 部署后的正式地址，用于 SEO 的 canonical 与 sitemap，末尾不要带斜杠
-  siteUrl: 'https://yourname.github.io',
+  siteUrl: 'https://marcus-charles.github.io/blog',
 
   /* ---------- 备案号（中国大陆服务器才需要，留空则不显示） ---------- */
   icp: '',
@@ -34,7 +35,7 @@ window.siteConfig = {
   /* ---------- 社交链接 ---------- */
   // icon 可选值：github / twitter / mail / rss
   social: [
-    { icon: 'github',  label: 'GitHub', href: 'https://github.com/yourname' },
+    { icon: 'github',  label: 'GitHub', href: 'https://github.com/Marcus-Charles' },
     { icon: 'twitter', label: 'X',      href: 'https://x.com/yourname' },
     { icon: 'mail',    label: '邮箱',   href: 'mailto:you@example.com' },
     { icon: 'rss',     label: 'RSS',    href: 'rss.xml' }

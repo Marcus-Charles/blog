@@ -24,8 +24,16 @@
   }
   window.escapeHtml = escapeHtml;
 
-  /** 解析 basePath，统一成 "前缀无尾斜杠" 形式 */
-  var BASE = (cfg.basePath || '').replace(/\/+$/, '');
+  /**
+   * 解析 basePath，统一成 "前缀无尾斜杠" 形式。
+   * 会自动校验：只有当当前页面地址确实跑在这个前缀下时才启用，
+   * 否则回退到根路径。这样同一份代码既能部署在 /blog/ 子路径（GitHub Pages 项目站点），
+   * 也能部署在域名根目录（自定义域名 / 用户站点），不用改配置。
+   */
+  var CFG_BASE = String(cfg.basePath || '').replace(/\/+$/, '');
+  var BASE = (CFG_BASE !== '' && window.location.pathname.indexOf(CFG_BASE + '/') === 0)
+    ? CFG_BASE
+    : '';
 
   /** 给站内相对路径拼接 basePath */
   function url(path) {
