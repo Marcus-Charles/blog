@@ -31,7 +31,9 @@
    * 也能部署在域名根目录（自定义域名 / 用户站点），不用改配置。
    */
   var CFG_BASE = String(cfg.basePath || '').replace(/\/+$/, '');
-  var BASE = (CFG_BASE !== '' && window.location.pathname.indexOf(CFG_BASE + '/') === 0)
+  var HERE = window.location.pathname;
+  var BASE = (CFG_BASE !== '' &&
+              (HERE === CFG_BASE || HERE.indexOf(CFG_BASE + '/') === 0))
     ? CFG_BASE
     : '';
 
