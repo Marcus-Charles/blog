@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>写文章 · 后台</title>
+  <meta name="theme-color" content="#fdfdfc">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6f4e'/%3E%3Ctext x='16' y='22' font-size='18' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'%3E%E7%99%BD%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('blog-theme');
+        var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) { document.documentElement.setAttribute('data-theme', 'light'); }
+    })();
+  </script>
+  <style>
+    .admin { max-width: 1180px; margin: 0 auto; padding: 24px 20px 60px; }
+    .admin h1 { font-size: 1.375rem; margin-bottom: 4px; }
+    .admin__sub { color: var(--text-muted); font-size: .875rem; margin-bottom: 24px; }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      margin-bottom: var(--space-md);
+    }
+    .panel h2 { font-size: .8125rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); margin-bottom: var(--space-md); }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
+    @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+
+    .field { margin-bottom: var(--space-md); }
+    .field label { display: block; font-size: .8125rem; font-weight: 600; margin-bottom: 6px; }
+    .field .hint { font-size: .75rem; color: var(--text-faint); font-weight: 400; margin-left: 6px; }
+    .field input, .field textarea, .field select {
+      width: 100%;
+      padding: 9px 12px;
+      font: inherit;
+      font-size: .9375rem;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .field input:focus, .field textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+    #md { min-height: 420px; font-family: var(--font-mono); font-size: .875rem; line-height: 1.7; resize: vertical; }
+
+    .preview {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--space-lg);
+      background: var(--bg);
+      min-height: 420px;
+      overflow-y: auto;
+      max-height: 640px;
+    }
+    .preview .prose { font-size: .9375rem; }
+
+    .btn {
+      padding: 10px 20px;
+      font: inherit;
+      font-size: .9375rem;
+      font-weight: 500;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      transition: background-color var(--transition), border-color var(--transition);
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn--primary:hover { opacity: .9; color: #fff; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .actions { display: flex; flex-wrap: wrap; gap: var(--space-sm); align-items: center; margin-top: var(--space-md); }
+
+    .status {
+      margin-top: var(--space-md);
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--radius-sm);
+      font-size: .875rem;
+      display: none;
+    }
+    .status.is-ok    { display: block; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+    .status.is-err   { display: block; background: #fdecea; color: #b42318; border: 1px solid #f0b4ae; }
+    .status.is-info  { display: block; background: var(--bg-soft); color: var(--text-muted); border: 1px solid var(--border); }
+    [data-theme="dark"] .status.is-err { background: #2a1614; color: #ff9d95; border-color: #5c2b26; }
+
+    details.tips { margin-top: var(--space-md); font-size: .8125rem; color: var(--text-muted); }
+    details.tips summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+    details.tips ol { margin: var(--space-sm) 0 0; padding-left: 1.4em; }
+    details.tips li { margin-bottom: 4px; }
+    details.tips code { word-break: break-all; }
+
+    .existing { font-size: .8125rem; color: var(--text-faint); }
+    .existing ul { margin: 4px 0 0; padding-left: 1.2em; max-height: 160px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <main class="admin">
+    <h1>写文章</h1>
+    <p class="admin__sub">用 Markdown 写，点「发布」直接提交到 GitHub，约 1 分钟后线上生效。</p>
+
+    <!-- 第一步：Token -->
+    <section class="panel">
+      <h2>1 · 授权（只需一次）</h2>
+      <div class="field">
+        <label for="token">GitHub Token<span class="hint">只保存在你自己这台电脑的浏览器里，不会上传、不进代码</span></label>
+        <input id="token" type="password" placeholder="github_pat_..." autocomplete="off">
+      </div>
+      <div class="actions">
+        <button class="btn" id="btn-save-token" type="button">记住这台电脑</button>
+        <button class="btn" id="btn-clear-token" type="button">清除</button>
+        <span class="existing" id="token-status"></span>
+      </div>
+      <details class="tips">
+        <summary>怎么拿到这个 Token？（点开看步骤）</summary>
+        <ol>
+          <li>打开 <code>github.com/settings/personal-access-tokens</code>（Settings → Developer settings → Personal access tokens → Fine-grained tokens）</li>
+          <li>点 <strong>Generate new token</strong></li>
+          <li>Repository access 选 <strong>Only select repositories</strong> → 只勾 <strong>blog</strong></li>
+          <li>Permissions → Repository permissions → <strong>Contents</strong> 设为 <strong>Read and write</strong></li>
+          <li>生成后复制，粘到上面输入框，点「记住这台电脑」</li>
+        </ol>
+      </details>
+    </section>
+
+    <!-- 第二步：文章信息 -->
+    <section class="panel">
+      <h2>2 · 文章信息</h2>
+      <div class="grid2">
+        <div class="field"><label for="f-title">标题</label><input id="f-title" placeholder="例如：为什么我重新开始写博客"></div>
+        <div class="field"><label for="f-date">日期<span class="hint">列表按日期倒序</span></label><input id="f-date" type="date"></div>
+        <div class="field"><label for="f-tags">标签<span class="hint">逗号分隔，如：前端, CSS</span></label><input id="f-tags" placeholder="随笔, 写作"></div>
+        <div class="field"><label for="f-id">网址 ID<span class="hint">英文短横线，决定文章链接</span></label><input id="f-id" placeholder="自动生成"></div>
+      </div>
+      <div class="field"><label for="f-excerpt">摘要<span class="hint">显示在列表卡片上，40-80 字最佳</span></label><input id="f-excerpt" placeholder="一句话说清这篇讲了什么"></div>
+      <div class="field" style="max-width:200px"><label for="f-min">预计阅读（分钟）</label><input id="f-min" type="number" value="5" min="1"></div>
+    </section>
+
+    <!-- 第三步：正文 -->
+    <section class="panel">
+      <h2>3 · 正文（Markdown）</h2>
+      <div class="grid2">
+        <div class="field">
+          <textarea id="md" placeholder="## 小标题&#10;&#10;正文段落，支持 **加粗**、*斜体*、`行内代码`、[链接](https://...)&#10;&#10;- 列表项&#10;- 列表项&#10;&#10;> 引用&#10;&#10;```&#10;代码块&#10;```"></textarea>
+        </div>
+        <div class="field">
+          <label>实时预览</label>
+          <div class="preview"><div class="prose" id="preview"><p style="color:var(--text-faint)">左边开始写，这里会实时预览。</p></div></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn--primary" id="btn-publish" type="button">发布到 GitHub</button>
+        <button class="btn" id="btn-copy" type="button">复制代码片段（手动粘贴用）</button>
+        <button class="btn" id="btn-reset" type="button">清空</button>
+      </div>
+      <div class="status" id="status"></div>
+    </section>
+
+    <details class="tips">
+      <summary>已有文章（避免 ID 重复）</summary>
+      <div class="existing"><ul id="existing-list"><li>点「发布」前会自动检查</li></ul></div>
+    </details>
+  </main>
+
+  <script>
+  (function () {
+    'use strict';
+
+    var REPO_OWNER = 'Marcus-Charles';
+    var REPO_NAME  = 'blog';
+    var FILE_PATH  = 'data/posts.js';
+    var BRANCH     = 'main';
+    var TOKEN_KEY  = 'blog-admin-token';
+
+    var $ = function (id) { return document.getElementById(id); };
+
+    /* ---------- Token ---------- */
+    function getToken() {
+      try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; }
+    }
+    function setToken(v) {
+      try { v ? localStorage.setItem(TOKEN_KEY, v) : localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+    }
+    function refreshTokenStatus() {
+      var t = getToken();
+      $('token-status').textContent = t ? '已记住（' + t.slice(0, 8) + '…），发布时会自动使用' : '尚未设置';
+    }
+
+    /* ---------- base64（UTF-8 安全） ---------- */
+    function toB64(str) {
+      var bytes = new TextEncoder().encode(str);
+      var bin = '';
+      var chunk = 0x8000;
+      for (var i = 0; i < bytes.length; i += chunk) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      }
+      return btoa(bin);
+    }
+    function fromB64(b64) {
+      var bin = atob(b64);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new TextDecoder().decode(bytes);
+    }
+
+    /* ---------- 极简 Markdown → HTML ---------- */
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function inline(s) {
+      var out = esc(s);
+      // 行内代码先占位，避免被其他规则破坏
+      var codes = [];
+      out = out.replace(/`([^`]+)`/g, function (_, c) { codes.push(c); return '\u0000' + (codes.length - 1) + '\u0000'; });
+      out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      out = out.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
+      out = out.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2">$1</a>');
+      out = out.replace(/\u0000(\d+)\u0000/g, function (_, i) { return '<code>' + codes[Number(i)] + '</code>'; });
+      return out;
+    }
+    function mdToHtml(md) {
+      var lines = String(md || '').replace(/\r\n/g, '\n').split('\n');
+      var html = '';
+      var i = 0;
+      var inCode = false;
+      var codeLang = '';
+      var listType = null;      // 'ul' | 'ol'
+      var para = [];
+      var quote = [];
+
+      function flushPara() {
+        if (para.length) { html += '<p>' + inline(para.join(' ')) + '</p>\n'; para = []; }
+      }
+      function flushList() {
+        if (listType) { html += '</' + listType + '>\n'; listType = null; }
+      }
+      function flushQuote() {
+        if (quote.length) { html += '<blockquote><p>' + inline(quote.join(' ')) + '</p></blockquote>\n'; quote = []; }
+      }
+      function flushAll() { flushPara(); flushList(); flushQuote(); }
+
+      for (; i < lines.length; i++) {
+        var line = lines[i];
+
+        // 代码块
+        var fence = line.match(/^```(\w*)\s*$/);
+        if (fence) {
+          if (!inCode) { flushAll(); inCode = true; codeLang = fence[1] || ''; html += '<pre><code>'; }
+          else { inCode = false; html += '</code></pre>\n'; }
+          continue;
+        }
+        if (inCode) { html += esc(line) + '\n'; continue; }
+
+        // 分割线
+        if (/^\s*(---|\*\*\*)\s*$/.test(line)) { flushAll(); html += '<hr>\n'; continue; }
+
+        // 标题
+        var h = line.match(/^(#{1,4})\s+(.*)$/);
+        if (h) {
+          flushAll();
+          var lv = Math.min(h[1].length + 1, 4);
+          html += '<h' + lv + '>' + inline(h[2]) + '</h' + lv + '>\n';
+          continue;
+        }
+
+        // 引用
+        if (/^>\s?/.test(line)) {
+          flushPara(); flushList();
+          quote.push(line.replace(/^>\s?/, ''));
+          continue;
+        }
+        flushQuote();
+
+        // 列表
+        var ul = line.match(/^\s*[-*+]\s+(.*)$/);
+        var ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+        if (ul || ol) {
+          flushPara();
+          var want = ul ? 'ul' : 'ol';
+          if (listType !== want) { flushList(); html += '<' + want + '>\n'; listType = want; }
+          html += '<li>' + inline((ul || ol)[1]) + '</li>\n';
+          continue;
+        }
+        flushList();
+
+        // 空行分段
+        if (line.trim() === '') { flushPara(); continue; }
+
+        para.push(line.trim());
+      }
+      flushAll();
+      if (inCode) html += '</code></pre>\n';
+      return html.trim();
+    }
+
+    /* ---------- 表单 → 文章对象 ---------- */
+    function slugify(s) {
+      return String(s).toLowerCase()
+        .replace(/[^\w\u4e00-\u9fa5]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 60) || 'post-' + Date.now();
+    }
+    function buildEntry() {
+      var title = $('f-title').value.trim();
+      if (!title) throw new Error('标题不能为空');
+      var md = $('md').value;
+      if (!md.trim()) throw new Error('正文不能为空');
+
+      var id = $('f-id').value.trim() || slugify(title);
+      var date = $('f-date').value || new Date().toISOString().slice(0, 10);
+      var tags = $('f-tags').value.split(/[,，]/).map(function (t) { return t.trim(); }).filter(Boolean);
+      var excerpt = $('f-excerpt').value.trim() ||
+        String(md).replace(/[#>*`\-\[\]]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) + '…';
+      var minutes = parseInt($('f-min').value, 10) || 5;
+
+      var obj = {
+        id: id,
+        title: title,
+        date: date,
+        tags: tags,
+        excerpt: excerpt,
+        cover: '',
+        readingTime: minutes,
+        content: mdToHtml(md)
+      };
+      return obj;
+    }
+
+    function entryToSource(obj) {
+      // 用 JSON.stringify 生成对象字面量（合法 JS，中文原样保留）
+      return JSON.stringify(obj, null, 2)
+        .split('\n')
+        .map(function (l, i) { return i === 0 ? l : '  ' + l; })
+        .join('\n');
+    }
+
+    /* ---------- 状态 ---------- */
+    function setStatus(msg, kind) {
+      var el = $('status');
+      el.className = 'status is-' + (kind || 'info');
+      el.textContent = msg;
+    }
+
+    /* ---------- 预览 ---------- */
+    function renderPreview() {
+      try {
+        var html = mdToHtml($('md').value);
+        $('preview').innerHTML = html || '<p style="color:var(--text-faint)">左边开始写，这里会实时预览。</p>';
+      } catch (e) {
+        $('preview').innerHTML = '<p style="color:#b42318">预览出错：' + esc(e.message) + '</p>';
+      }
+    }
+
+    /* ---------- 已有文章列表 ---------- */
+    function listIds(src) {
+      var ids = [];
+      var re = /id:\s*'([^']+)'/g;
+      var m;
+      while ((m = re.exec(src)) !== null) ids.push(m[1]);
+      return ids;
+    }
+    function renderExisting(ids) {
+      var ul = $('existing-list');
+      if (!ids.length) { ul.innerHTML = '<li>（暂无）</li>'; return; }
+      ul.innerHTML = ids.map(function (i) { return '<li>' + esc(i) + '</li>'; }).join('');
+    }
+
+    /* ---------- 发布 ---------- */
+    function api(path, opts) {
+      var token = $('token').value.trim() || getToken();
+      if (!token) throw new Error('请先填写 GitHub Token');
+      var headers = {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': 'Bearer ' + token,
+        'X-GitHub-Api-Version': '2022-11-28'
+      };
+      if (opts && opts.body) headers['Content-Type'] = 'application/json';
+      return fetch('https://api.github.com/repos/' + REPO_OWNER + '/' + REPO_NAME + '/contents/' + path,
+        Object.assign({}, opts, { headers: headers }))
+        .then(function (r) {
+          return r.json().then(function (j) {
+            if (!r.ok) throw new Error((j && j.message) ? j.message : ('HTTP ' + r.status));
+            return j;
+          });
+        });
+    }
+
+    function publish() {
+      var btn = $('btn-publish');
+      btn.disabled = true;
+      setStatus('正在读取远端文件…', 'info');
+
+      var entry;
+      try { entry = buildEntry(); } catch (e) {
+        btn.disabled = false;
+        setStatus(e.message, 'err');
+        return;
+      }
+
+      api(FILE_PATH, { method: 'GET' })
+        .then(function (file) {
+          var src = fromB64(file.content);
+          renderExisting(listIds(src));
+
+          if (listIds(src).indexOf(entry.id) !== -1) {
+            throw new Error('ID「' + entry.id + '」已存在，换一个再发');
+          }
+
+          var marker = 'window.posts = [';
+          var at = src.indexOf(marker);
+          if (at === -1) throw new Error('没找到 window.posts = [，文件结构可能变了');
+          var insertAt = at + marker.length;
+
+          var newSrc = src.slice(0, insertAt) + '\n' + entryToSource(entry) + ',' + src.slice(insertAt);
+
+          setStatus('正在提交…', 'info');
+          return api(FILE_PATH, {
+            method: 'PUT',
+            body: JSON.stringify({
+              message: 'post: ' + entry.title,
+              content: toB64(newSrc),
+              sha: file.sha,
+              branch: BRANCH
+            })
+          });
+        })
+        .then(function (res) {
+          var url = 'https://' + REPO_OWNER + '.github.io/' + REPO_NAME + '/post.html?id=' + encodeURIComponent(entry.id);
+          setStatus('发布成功！约 1 分钟后生效：' + url +
+            '（GitHub 提交：' + (res.commit && res.commit.sha ? res.commit.sha.slice(0, 7) : 'ok') + '）', 'ok');
+          // 清空正文，保留元信息方便连续写
+          $('md').value = '';
+          $('f-title').value = '';
+          $('f-excerpt').value = '';
+          $('f-id').value = '';
+          $('f-tags').value = '';
+          renderPreview();
+        })
+        .catch(function (e) {
+          setStatus('失败：' + e.message, 'err');
+        })
+        .then(function () { btn.disabled = false; });
+    }
+
+    /* ---------- 复制片段 ---------- */
+    function copySnippet() {
+      try {
+        var text = entryToSource(buildEntry()) + ',';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            setStatus('已复制，粘贴到 data/posts.js 数组最前面即可', 'ok');
+          });
+        } else {
+          $('md').value = text;
+          setStatus('浏览器不支持剪贴板，已把代码放进左侧输入框，手动复制', 'info');
+        }
+      } catch (e) { setStatus(e.message, 'err'); }
+    }
+
+    /* ---------- 初始化 ---------- */
+    function init() {
+      $('f-date').value = new Date().toISOString().slice(0, 10);
+      var saved = getToken();
+      if (saved) $('token').value = saved;
+      refreshTokenStatus();
+
+      $('btn-save-token').addEventListener('click', function () {
+        setToken($('token').value.trim());
+        refreshTokenStatus();
+        setStatus($('token').value.trim() ? 'Token 已保存在本机浏览器' : '已清除', 'ok');
+      });
+      $('btn-clear-token').addEventListener('click', function () {
+        setToken('');
+        $('token').value = '';
+        refreshTokenStatus();
+        setStatus('已清除', 'info');
+      });
+
+      $('md').addEventListener('input', renderPreview);
+      $('f-title').addEventListener('blur', function () {
+        if (!$('f-id').value.trim() && $('f-title').value.trim()) {
+          $('f-id').value = slugify($('f-title').value);
+        }
+      });
+
+      $('btn-publish').addEventListener('click', publish);
+      $('btn-copy').addEventListener('click', copySnippet);
+      $('btn-reset').addEventListener('click', function () {
+        ['f-title', 'f-excerpt', 'f-id', 'f-tags', 'md'].forEach(function (id) { $(id).value = ''; });
+        $('f-date').value = new Date().toISOString().slice(0, 10);
+        renderPreview();
+        setStatus('已清空', 'info');
+      });
+
+      renderPreview();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else { init(); }
+  })();
+  </script>
+</body>
+</html>
