@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>首页 · 我的博客</title>
+  <meta name="description" content="一个关于前端开发、读书笔记与日常思考的个人博客。">
+
+  <!-- 主题色：随明暗模式切换地址栏颜色 -->
+  <meta name="theme-color" content="#fdfdfc">
+  <meta name="color-scheme" content="light dark">
+
+  <!-- Open Graph / 社交分享 -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="首页 · 我的博客">
+  <meta property="og:description" content="一个关于前端开发、读书笔记与日常思考的个人博客。">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <!-- 站点图标（内联 SVG data-uri，无需额外文件请求） -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6f4e'/%3E%3Ctext x='16' y='22' font-size='18' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'%3E%E7%99%BD%3C/text%3E%3C/svg%3E">
+
+  <!-- 预连接字体服务（有则加速，无则无副作用）-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- 在样式解析前同步应用主题，消除深色模式下的白屏闪烁 -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('blog-theme');
+        var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+
+  <!-- 页头由 js/main.js 渲染 -->
+  <header id="site-header"></header>
+
+  <main id="main">
+    <!-- ============ Hero 区 ============ -->
+    <section class="hero container">
+      <img class="hero__avatar" src="assets/avatar.svg" alt="" width="72" height="72">
+      <h1 class="hero__title" id="hero-title">你好，我是 <em>你的名字</em></h1>
+      <p class="hero__text" id="hero-text"></p>
+
+      <p class="hero__meta">
+        <span id="hero-bio"></span>
+        <span id="hero-stats" style="display:flex;gap:16px"></span>
+      </p>
+    </section>
+
+    <!-- ============ 最新文章 ============ -->
+    <section class="section container" aria-labelledby="latest-heading">
+      <div class="section-head">
+        <h2 id="latest-heading">最新文章</h2>
+        <a class="section-head__link" href="posts.html">查看全部 →</a>
+      </div>
+      <ul class="post-list" id="latest-posts">
+        <!-- js/home.js 注入 -->
+      </ul>
+    </section>
+  </main>
+
+  <!-- 页脚由 js/main.js 渲染 -->
+  <footer id="site-footer"></footer>
+
+  <!-- 顺序很重要：config → posts 数据 → main → 页面脚本 -->
+  <script src="js/config.js"></script>
+  <script src="data/posts.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/home.js"></script>
+</body>
+</html>

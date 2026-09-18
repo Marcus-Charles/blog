@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>关于我 · 我的博客</title>
+  <meta name="description" content="关于这个博客和它的作者。">
+
+  <meta name="theme-color" content="#fdfdfc">
+  <meta name="color-scheme" content="light dark">
+
+  <meta property="og:type" content="profile">
+  <meta property="og:title" content="关于我 · 我的博客">
+  <meta property="og:description" content="关于这个博客和它的作者。">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6f4e'/%3E%3Ctext x='16' y='22' font-size='18' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'%3E%E7%99%BD%3C/text%3E%3C/svg%3E">
+
+  <link rel="stylesheet" href="css/style.css">
+
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('blog-theme');
+        var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <header id="site-header"></header>
+
+  <main id="main">
+    <section class="container" style="padding-top:56px">
+      <div class="page-header" style="padding-top:0;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+        <img id="about-avatar" src="assets/avatar.svg" alt="" width="80" height="80"
+             style="width:80px;height:80px;border-radius:50%;border:1px solid var(--border);background:var(--bg-soft)">
+        <div style="min-width:0;flex:1">
+          <h1 class="page-header__title" id="about-name" style="margin-bottom:4px">你的名字</h1>
+          <p class="page-header__lead" id="about-role"></p>
+        </div>
+      </div>
+
+      <!-- 自我介绍 -->
+      <div class="prose" id="about-bio" style="margin-top:32px"></div>
+
+      <!-- 技能标签 -->
+      <h2 style="font-size:1.125rem;margin-top:40px">技能</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:8px" id="about-skills"></div>
+
+      <!-- 时间线 -->
+      <h2 style="font-size:1.125rem;margin-top:40px">经历</h2>
+      <ul style="list-style:none;padding:0;margin:0" id="about-timeline"></ul>
+
+      <!-- 最近在做什么 -->
+      <div class="info-grid">
+        <div class="info-card">
+          <h3>最近</h3>
+          <ul id="about-now"></ul>
+        </div>
+        <div class="info-card">
+          <h3>联系我</h3>
+          <ul id="about-contact" style="list-style:none;padding:0"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer id="site-footer"></footer>
+
+  <script src="js/config.js"></script>
+  <script src="data/posts.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/about.js"></script>
+</body>
+</html>
