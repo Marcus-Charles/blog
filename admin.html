@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>写文章 · 后台</title>
+  <title>后台 · 管理文章与照片</title>
   <meta name="theme-color" content="#fdfdfc">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6f4e'/%3E%3Ctext x='16' y='22' font-size='18' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'%3E%E7%99%BD%3C/text%3E%3C/svg%3E">
@@ -115,12 +115,27 @@
     .post-row__meta strong { font-size: .9375rem; }
     .post-row__meta span { color: var(--text-faint); font-size: .75rem; word-break: break-all; }
     .post-row > .btn { flex: none; padding: 6px 14px; font-size: .8125rem; }
+
+    .photo-mgr-row {
+      display: flex; align-items: center; gap: var(--space-md);
+      padding: 10px 0; border-top: 1px solid var(--border);
+    }
+    .photo-mgr-row:first-child { border-top: 0; }
+    .photo-mgr-thumb {
+      width: 64px; height: 64px; object-fit: cover; flex: none;
+      border-radius: var(--radius-sm); background: var(--bg-soft); border: 1px solid var(--border);
+    }
+    .photo-mgr-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+    .photo-mgr-meta strong { font-size: .9375rem; }
+    .photo-mgr-meta span { color: var(--text-faint); font-size: .75rem; word-break: break-all; }
+    .photo-mgr-row .actions { flex: none; }
+    #photo-edit-info { font-size: .8125rem; color: var(--accent); margin: 0 0 12px; }
   </style>
 </head>
 <body>
   <main class="admin">
-    <h1>写文章</h1>
-    <p class="admin__sub">用 Markdown 写，点「发布」直接提交到 GitHub，约 1 分钟后线上生效。<span id="ver" style="color:var(--accent);font-weight:600"></span></p>
+    <h1>后台</h1>
+    <p class="admin__sub">写文章、管照片，点操作直接提交到 GitHub，约 1 分钟后线上生效。<span id="ver" style="color:var(--accent);font-weight:600"></span></p>
 
     <!-- 第一步：Token -->
     <section class="panel">
@@ -192,6 +207,33 @@
       <div class="status" id="manage-status"></div>
     </section>
 
+    <!-- 第五步：照片管理 -->
+    <section class="panel">
+      <h2>5 · 照片管理（增 / 改 / 删）</h2>
+      <div class="actions">
+        <button class="btn" id="btn-photo-refresh" type="button">刷新列表</button>
+        <span class="existing">列表读本站的 <code>data/photos.js</code>（不联网也能看到）；点「删 / 改」时才调 GitHub API。</span>
+      </div>
+      <div id="photo-mgr-list" style="margin-top:var(--space-md)"></div>
+      <div class="status" id="photo-status"></div>
+
+      <h3 style="margin:24px 0 12px;font-size:1rem">添加 / 编辑照片</h3>
+      <p id="photo-edit-info"></p>
+      <div class="field">
+        <label for="photo-file">选择图片<span class="hint">自动压缩到宽 ≤ 1600px（JPEG），与现有照片标准一致</span></label>
+        <input id="photo-file" type="file" accept="image/*">
+      </div>
+      <div class="grid2">
+        <div class="field"><label for="photo-alt">画面内容（alt）</label><input id="photo-alt" placeholder="屏幕阅读器靠它，也作默认标题"></div>
+        <div class="field"><label for="photo-date">拍摄日期<span class="hint">决定时间分格</span></label><input id="photo-date" type="date"></div>
+      </div>
+      <div class="field"><label for="photo-caption">说明（caption）</label><input id="photo-caption" placeholder="可选，显示在照片下方"></div>
+      <div class="actions">
+        <button class="btn btn--primary" id="btn-photo-save" type="button">上传并添加</button>
+        <button class="btn" id="btn-photo-cancel" type="button" hidden>取消编辑</button>
+      </div>
+    </section>
+
     <details class="tips">
       <summary>已有文章 ID（避免重复）</summary>
       <div class="existing"><ul id="existing-list"><li>点「发布」时会自动检查</li></ul></div>
@@ -207,7 +249,7 @@
     var FILE_PATH  = 'data/posts.js';
     var BRANCH     = 'main';
     var TOKEN_KEY  = 'blog-admin-token';
-    var VERSION    = 'v2026-09-19.5';   // 页面顶部显示，用来确认你看到的不是缓存旧版
+    var VERSION    = 'v2026-09-19.6';   // 页面顶部显示，用来确认你看到的不是缓存旧版
 
     var $ = function (id) { return document.getElementById(id); };
 
@@ -710,6 +752,279 @@
         });
     }
 
+    /* ========== 照片管理：增 / 改 / 删 ========== */
+    var PHOTO_FILE = 'data/photos.js';
+    var PHOTO_DIR  = 'assets/photos';
+    var editingSrc = null;   // 编辑中的照片 src（null = 添加模式）
+
+    function basename(p) { var i = p.lastIndexOf('/'); return i === -1 ? p : p.slice(i + 1); }
+    function dataUrlToB64(d) { return d.slice(d.indexOf(',') + 1); }
+
+    // 解析 window.photos = [ ... ]；复用文章那套括号配对，认单/双引号
+    function parsePhotos(src) {
+      var m = src.match(/window\.photos\s*=\s*\[/);
+      if (!m) return [];
+      var i = m.index + m[0].length;
+      var out = [];
+      while (i < src.length) {
+        while (i < src.length && /[\s,]/.test(src.charAt(i))) i++;
+        if (src.charAt(i) === ']') break;
+        if (src.charAt(i) !== '{') { i++; continue; }
+        var start = i;
+        var end = matchBrace(src, start);
+        if (end === -1) break;
+        var text = src.slice(start, end + 1);
+        function pv(key) {
+          var r = new RegExp('(?:"' + key + '"|' + key + ')\\s*:\\s*[\'"]([^\'"]*)[\'"]');
+          var mm = text.match(r);
+          return mm ? mm[1] : '';
+        }
+        out.push({ src: pv('src'), alt: pv('alt'), caption: pv('caption'), date: pv('date'), start: start, end: end + 1 });
+        i = end + 1;
+      }
+      return out;
+    }
+    // 重新生成整个文件（字段固定为 src/alt/caption/date，与展示页一致）
+    function photosToSource(arr) {
+      var items = arr.map(function (p) {
+        var inner = ['src', 'alt', 'caption', 'date'].map(function (k) {
+          return '    ' + JSON.stringify(k) + ': ' + JSON.stringify(p[k] != null ? p[k] : '');
+        }).join(',\n');
+        return '  {\n' + inner + '\n  }';
+      });
+      return 'window.photos = [\n' + items.join(',\n') + '\n];\n';
+    }
+    function nextPhotoName(photos) {
+      var max = 0;
+      photos.forEach(function (p) {
+        var mm = /img-(\d+)\.jpg$/i.exec(p.src || '');
+        if (mm) max = Math.max(max, parseInt(mm[1], 10));
+      });
+      return 'img-' + String(max + 1).padStart(2, '0') + '.jpg';
+    }
+
+    // 浏览器端压缩：宽 ≤1600px，导出 JPEG（与仓库现有照片标准一致）
+    function compressImage(file, maxW, quality) {
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onerror = function () { reject(new Error('文件读取失败')); };
+        reader.onload = function () {
+          var img = new Image();
+          img.onerror = function () { reject(new Error('图片解码失败')); };
+          img.onload = function () {
+            var scale = img.width > maxW ? maxW / img.width : 1;
+            var cw = Math.max(1, Math.round(img.width * scale));
+            var ch = Math.max(1, Math.round(img.height * scale));
+            var canvas = document.createElement('canvas');
+            canvas.width = cw; canvas.height = ch;
+            try { canvas.getContext('2d').drawImage(img, 0, 0, cw, ch); }
+            catch (e) { reject(new Error('图片绘制失败')); return; }
+            try { resolve(canvas.toDataURL('image/jpeg', quality)); }
+            catch (e) { reject(new Error('图片压缩失败')); }
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    /* ---------- 照片区状态（独立提示框，避免和文章区混） ---------- */
+    var photoTicker = null;
+    function stopPhotoTicker() { if (photoTicker) { clearInterval(photoTicker); photoTicker = null; } }
+    function photoSetStatus(msg, kind) {
+      stopPhotoTicker();
+      var el = $('photo-status');
+      if (el) { el.className = 'status is-' + (kind || 'info'); el.textContent = msg; }
+    }
+    function startPhotoTicker(msg, maxSec) {
+      stopPhotoTicker();
+      var t0 = Date.now(), limit = maxSec || 15;
+      photoSetStatus(msg + '（已等待 0s / 最多 ' + limit + 's）', 'info');
+      photoTicker = setInterval(function () {
+        var s = Math.round((Date.now() - t0) / 1000);
+        photoSetStatus(msg + '（已等待 ' + s + 's / 最多 ' + limit + 's）', 'info');
+      }, 1000);
+    }
+
+    /* ---------- 列表读取 ---------- */
+    function loadPhotoMgr() {
+      var box = $('photo-mgr-list');
+      box.innerHTML = '<p class="admin__sub">正在读取…</p>';
+      fetchWithTimeout('data/photos.js?t=' + Date.now(), { cache: 'no-store' }, 8000)
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+        .then(function (src) {
+          if (src.indexOf('window.photos') === -1) throw new Error('内容不是 photos.js');
+          renderPhotoMgr(parsePhotos(src));
+        })
+        .catch(function () {
+          api(PHOTO_FILE, { method: 'GET' })
+            .then(function (file) { renderPhotoMgr(parsePhotos(fromB64(file.content))); })
+            .catch(function (e) {
+              box.innerHTML = '<p class="admin__sub" style="color:#b42318">读取失败：' + esc(friendlyError(e)) + '</p>';
+            });
+        });
+    }
+    function renderPhotoMgr(photos) {
+      var box = $('photo-mgr-list');
+      if (!photos.length) { box.innerHTML = '<p class="admin__sub">还没有照片。</p>'; return; }
+      box.innerHTML = photos.map(function (p) {
+        return '<div class="photo-mgr-row" data-src="' + esc(p.src) + '">' +
+          '<img class="photo-mgr-thumb" src="' + esc(p.src) + '" alt="' + esc(p.alt || '') + '" loading="lazy">' +
+          '<div class="photo-mgr-meta"><strong>' + esc(p.alt || '(未命名)') + '</strong>' +
+          '<span>' + esc(p.date || '未注明时间') + ' · <code>' + esc(p.src) + '</code></span>' +
+          (p.caption ? '<span>' + esc(p.caption) + '</span>' : '') +
+          '</div>' +
+          '<div class="actions">' +
+            '<button class="btn" type="button" data-act="edit">改</button>' +
+            '<button class="btn btn--danger" type="button" data-act="del">删</button>' +
+          '</div>' +
+        '</div>';
+      }).join('') + '<p class="admin__sub" style="margin-top:12px">共 ' + photos.length + ' 张。</p>';
+      Array.prototype.forEach.call(box.querySelectorAll('.photo-mgr-row'), function (row) {
+        var src = row.getAttribute('data-src');
+        var photo = photos.find(function (p) { return p.src === src; });
+        row.querySelector('[data-act="edit"]').onclick = function () { editPhoto(photo); };
+        row.querySelector('[data-act="del"]').onclick = function () { removePhoto(photo); };
+      });
+    }
+
+    /* ---------- 表单 ---------- */
+    function resetPhotoForm() {
+      editingSrc = null;
+      $('photo-file').value = '';
+      $('photo-alt').value = '';
+      $('photo-caption').value = '';
+      $('photo-date').value = new Date().toISOString().slice(0, 10);
+      $('btn-photo-save').textContent = '上传并添加';
+      var cancel = $('btn-photo-cancel'); if (cancel) cancel.hidden = true;
+      var info = $('photo-edit-info'); if (info) info.textContent = '';
+    }
+    function editPhoto(photo) {
+      editingSrc = photo.src;
+      $('photo-alt').value = (photo.alt && photo.alt !== '照片') ? photo.alt : '';
+      $('photo-caption').value = photo.caption || '';
+      $('photo-date').value = photo.date || new Date().toISOString().slice(0, 10);
+      $('photo-file').value = '';
+      $('btn-photo-save').textContent = '保存修改';
+      var cancel = $('btn-photo-cancel'); if (cancel) cancel.hidden = false;
+      var info = $('photo-edit-info');
+      if (info) info.textContent = '正在编辑：' + photo.src + '（重新选图可替换原图，留空则保留原图）';
+      photoSetStatus('已填入「' + (photo.alt || photo.src) + '」的信息，改完点「保存修改」。', 'info');
+    }
+    // 删除图片文件（best-effort：删不掉不影响数据更新）
+    function deletePhotoFile(name) {
+      return api(PHOTO_DIR + '/' + name, { method: 'GET' }).then(function (imgFile) {
+        return api(PHOTO_DIR + '/' + name, {
+          method: 'DELETE',
+          body: JSON.stringify({ message: 'photo: remove file ' + name, sha: imgFile.sha, branch: BRANCH })
+        });
+      });
+    }
+
+    function savePhoto() {
+      var fileInput = $('photo-file');
+      var newFile = fileInput.files && fileInput.files[0];
+      var alt = $('photo-alt').value.trim();
+      var caption = $('photo-caption').value.trim();
+      var date = $('photo-date').value || new Date().toISOString().slice(0, 10);
+
+      startPhotoTicker('正在读取照片列表', 15);
+      api(PHOTO_FILE, { method: 'GET' })
+        .then(function (fileObj) {
+          var photos = parsePhotos(fromB64(fileObj.content));
+          var idx = editingSrc ? photos.findIndex(function (p) { return p.src === editingSrc; }) : -1;
+          if (editingSrc && idx === -1) throw new Error('没找到该照片，可能已被删');
+
+          // —— 添加模式 ——
+          if (idx === -1) {
+            if (!newFile) { photoSetStatus('请先选择一张图片', 'err'); return Promise.reject(new Error('__silent__')); }
+            var name = nextPhotoName(photos);
+            return compressImage(newFile, 1600, 0.82).then(function (dataUrl) {
+              startPhotoTicker('正在上传图片', 15);
+              return api(PHOTO_DIR + '/' + name, {
+                method: 'PUT',
+                body: JSON.stringify({ message: 'photo: add ' + name, content: dataUrlToB64(dataUrl), branch: BRANCH })
+              });
+            }).then(function () {
+              photos.push({ src: PHOTO_DIR + '/' + name, alt: alt || '照片', caption: caption, date: date });
+              startPhotoTicker('正在更新照片列表', 15);
+              return api(PHOTO_FILE, {
+                method: 'PUT',
+                body: JSON.stringify({ message: 'photo: add entry ' + name, content: toB64(photosToSource(photos)), sha: fileObj.sha, branch: BRANCH })
+              });
+            });
+          }
+
+          // —— 编辑模式 ——
+          var old = photos[idx];
+          if (!newFile) {
+            photos[idx] = { src: old.src, alt: alt || old.alt || '照片', caption: caption, date: date };
+            startPhotoTicker('正在保存修改', 15);
+            return api(PHOTO_FILE, {
+              method: 'PUT',
+              body: JSON.stringify({ message: 'photo: edit ' + old.src, content: toB64(photosToSource(photos)), sha: fileObj.sha, branch: BRANCH })
+            });
+          }
+          // 替换图片
+          var newName = nextPhotoName(photos);
+          return compressImage(newFile, 1600, 0.82).then(function (dataUrl) {
+            startPhotoTicker('正在上传新图', 15);
+            return api(PHOTO_DIR + '/' + newName, {
+              method: 'PUT',
+              body: JSON.stringify({ message: 'photo: replace ' + old.src, content: dataUrlToB64(dataUrl), branch: BRANCH })
+            });
+          }).then(function () {
+            return deletePhotoFile(basename(old.src)).then(function () { return null; }, function () { return null; });
+          }).then(function () {
+            photos[idx] = { src: PHOTO_DIR + '/' + newName, alt: alt || old.alt || '照片', caption: caption, date: date };
+            startPhotoTicker('正在保存修改', 15);
+            return api(PHOTO_FILE, {
+              method: 'PUT',
+              body: JSON.stringify({ message: 'photo: edit+replace ' + old.src, content: toB64(photosToSource(photos)), sha: fileObj.sha, branch: BRANCH })
+            });
+          });
+        })
+        .then(function () {
+          photoSetStatus(editingSrc ? '已保存修改，约 1 分钟后线上生效。' : '照片已添加，约 1 分钟后线上生效。', 'ok');
+          resetPhotoForm();
+          loadPhotoMgr();
+        })
+        .catch(function (e) {
+          if (e && e.message === '__silent__') return;
+          photoSetStatus((editingSrc ? '保存失败：' : '添加失败：') + friendlyError(e), 'err');
+          loadPhotoMgr();
+        });
+    }
+
+    function removePhoto(photo) {
+      if (!window.confirm('确定删除照片「' + (photo.alt || photo.src) + '」？\n会删除图片文件并向仓库提交删除 commit，约 1 分钟后线上生效。')) return;
+      Array.prototype.forEach.call(document.querySelectorAll('#photo-mgr-list button'), function (b) { b.disabled = true; });
+      startPhotoTicker('正在读取照片列表', 15);
+      api(PHOTO_FILE, { method: 'GET' })
+        .then(function (fileObj) {
+          var photos = parsePhotos(fromB64(fileObj.content));
+          var idx = photos.findIndex(function (p) { return p.src === photo.src; });
+          if (idx === -1) throw new Error('没找到该照片，可能已经被删');
+          photos.splice(idx, 1);
+          startPhotoTicker('正在更新照片列表', 15);
+          return api(PHOTO_FILE, {
+            method: 'PUT',
+            body: JSON.stringify({ message: 'photo: remove ' + (photo.alt || photo.src), content: toB64(photosToSource(photos)), sha: fileObj.sha, branch: BRANCH })
+          });
+        })
+        .then(function () {
+          return deletePhotoFile(basename(photo.src)).then(function () { return null; }, function () { return null; });
+        })
+        .then(function () {
+          photoSetStatus('已删除「' + (photo.alt || photo.src) + '」，约 1 分钟后线上生效。', 'ok');
+          loadPhotoMgr();
+        })
+        .catch(function (e) {
+          photoSetStatus('删除失败：' + friendlyError(e), 'err');
+          loadPhotoMgr();
+        });
+    }
+
     /* ---------- 复制片段 ---------- */
     function copySnippet() {
       try {
@@ -792,6 +1107,13 @@
       $('btn-publish').addEventListener('click', publish);
       $('btn-copy').addEventListener('click', copySnippet);
       $('btn-load-manage').addEventListener('click', loadManage);
+
+      $('btn-photo-refresh').addEventListener('click', loadPhotoMgr);
+      $('btn-photo-save').addEventListener('click', savePhoto);
+      $('btn-photo-cancel').addEventListener('click', function () {
+        resetPhotoForm();
+        photoSetStatus('已取消编辑。', 'info');
+      });
       $('btn-reset').addEventListener('click', function () {
         ['f-title', 'f-excerpt', 'f-id', 'f-tags', 'md'].forEach(function (id) { $(id).value = ''; });
         $('f-date').value = new Date().toISOString().slice(0, 10);
@@ -800,9 +1122,10 @@
       });
 
       renderPreview();
+      resetPhotoForm();
 
-      // 已经存过 Token 的话，打开页面就直接把已发布文章列出来，省得再点一次
-      if (getToken()) loadManage();
+      // 已经存过 Token 的话，打开页面就直接把已发布文章 / 照片列出来，省得再点一次
+      if (getToken()) { loadManage(); loadPhotoMgr(); }
     }
 
     if (document.readyState === 'loading') {
