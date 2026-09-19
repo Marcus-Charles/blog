@@ -66,7 +66,8 @@
   <footer id="site-footer"></footer>
 
   <script src="js/config.js"></script>
-  <script src="data/posts.js"></script>
+  <!-- 同上：带时间戳加载文章数据，避免改完文章后页面还是旧缓存 -->
+  <script>document.write('<scr'+'ipt src="data/posts.js?t='+Date.now()+'"><\/scr'+'ipt>');</script>
   <script src="js/main.js"></script>
   <script src="js/posts.js"></script>
 </body>

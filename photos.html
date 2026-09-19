@@ -64,7 +64,8 @@
   </div>
 
   <script src="js/config.js"></script>
-  <script src="data/photos.js"></script>
+  <!-- 照片数据同样可能被后台改动，带时间戳加载避免看到旧缓存 -->
+  <script>document.write('<scr'+'ipt src="data/photos.js?t='+Date.now()+'"><\/scr'+'ipt>');</script>
   <script src="js/main.js"></script>
   <script src="js/photos.js"></script>
 </body>

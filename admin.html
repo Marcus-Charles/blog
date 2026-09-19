@@ -257,7 +257,7 @@
     var FILE_PATH  = 'data/posts.js';
     var BRANCH     = 'main';
     var TOKEN_KEY  = 'blog-admin-token';
-    var VERSION    = 'v2026-09-19.10';  // 页面顶部显示，用来确认你看到的不是缓存旧版
+    var VERSION    = 'v2026-09-19.11';  // 页面顶部显示，用来确认你看到的不是缓存旧版
 
     var $ = function (id) { return document.getElementById(id); };
 
@@ -843,8 +843,9 @@
         })
         .then(function (res) {
           if (editingId) {
-            setStatus('已保存修改「' + editingId + '」，约 1 分钟后线上生效。' +
-              '（GitHub 提交：' + (res.commit && res.commit.sha ? res.commit.sha.slice(0, 7) : 'ok') + '）', 'ok');
+            setStatus('已保存修改「' + editingId + '」并提交成功（' +
+              (res.commit && res.commit.sha ? res.commit.sha.slice(0, 7) : 'ok') +
+              '）。GitHub Pages 重建约需 1 分钟，之后在前台页面按 Ctrl+F5 强刷就能看到。', 'ok');
             exitEditMode();
           } else {
             var url = 'https://' + REPO_OWNER + '.github.io/' + REPO_NAME + '/post.html?id=' + encodeURIComponent(entry.id);

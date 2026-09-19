@@ -74,7 +74,10 @@
 
   <!-- 顺序很重要：config → posts 数据 → main → 页面脚本 -->
   <script src="js/config.js"></script>
-  <script src="data/posts.js"></script>
+  <!-- 文章数据刚被后台改过时必须绕过浏览器缓存，否则保存后刷新还是旧内容。
+       这里同步输出带时间戳的 script，保证后面的 main.js 拿到的是最新数据。
+       写法上要避免内联脚本里出现字面的 </script>，故拼接字符串。 -->
+  <script>document.write('<scr'+'ipt src="data/posts.js?t='+Date.now()+'"><\/scr'+'ipt>');</script>
   <script src="js/main.js"></script>
   <script src="js/home.js"></script>
 </body>
