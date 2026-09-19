@@ -23,6 +23,9 @@
     .admin h1 { font-size: 1.375rem; margin-bottom: 4px; }
     .admin__sub { color: var(--text-muted); font-size: .875rem; margin-bottom: 24px; }
 
+    /* 把 .md / 图片拖进正文框时的高亮 */
+    textarea.is-drag { outline: 2px dashed #2f6f4e; outline-offset: 2px; background: rgba(47, 111, 78, .04); }
+
     .panel {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -192,6 +195,8 @@
         <button class="btn" id="btn-post-cancel" type="button" hidden>取消编辑</button>
         <input type="file" id="img-file" accept="image/*" hidden>
         <button class="btn" id="btn-insert-img" type="button">插入图片</button>
+        <input type="file" id="md-file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
+        <button class="btn" id="btn-upload-md" type="button">上传 Markdown</button>
         <button class="btn" id="btn-copy" type="button">复制代码片段</button>
         <button class="btn" id="btn-download" type="button">下载片段文件</button>
         <button class="btn" id="btn-reset" type="button">清空</button>
@@ -252,7 +257,7 @@
     var FILE_PATH  = 'data/posts.js';
     var BRANCH     = 'main';
     var TOKEN_KEY  = 'blog-admin-token';
-    var VERSION    = 'v2026-09-19.9';   // 页面顶部显示，用来确认你看到的不是缓存旧版
+    var VERSION    = 'v2026-09-19.10';  // 页面顶部显示，用来确认你看到的不是缓存旧版
 
     var $ = function (id) { return document.getElementById(id); };
 
@@ -575,6 +580,96 @@
         setStatus('图片已上传到 ' + path + '，约 1 分钟后线上生效。', 'ok');
         insertAtCursor('![' + alt + '](' + path + ')\n\n');
         return path;
+      });
+    }
+
+    /* ---------- 上传 Markdown 文件，直接填表 ---------- */
+
+    // 解析 YAML front matter（文件开头 --- 包裹的区块）；没有就整篇当正文
+    function parseFrontMatter(text) {
+      var meta = {};
+      var body = String(text || '').replace(/^\uFEFF/, '');   // 容错：去掉 BOM
+      var m = body.match(/^---\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/);
+      if (m) {
+        m[1].split(/\r?\n/).forEach(function (line) {
+          var kv = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+          if (!kv) return;
+          var k = kv[1].toLowerCase();
+          var v = String(kv[2] || '').trim().replace(/^['"]+|['"]+$/g, '');
+          if (k === 'tags' || k === 'tag' || k === 'keywords') {
+            // 支持 tags: [a, b] 和 tags: a, b 两种写法
+            meta.tags = v.replace(/^\[|\]$/g, '').split(/[,，]/)
+              .map(function (x) { return x.trim().replace(/^['"]+|['"]+$/g, ''); })
+              .filter(Boolean);
+          } else meta[k] = v;
+        });
+        body = body.slice(m[0].length);
+      }
+      return { meta: meta, body: body };
+    }
+
+    // 没有摘要时自动摘一句：去掉代码块/标题/引用/列表/图片，取第一个自然段
+    function autoExcerpt(body) {
+      var plain = String(body || '')
+        .replace(/```[\s\S]*?```/g, '')
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+        .replace(/^\s*#{1,6}\s+.*$/gm, '')
+        .replace(/^\s*>\s?.*$/gm, '')
+        .replace(/^\s*[-*+]\s+.*$/gm, '')
+        .replace(/^\s*\d+[.)]\s+.*$/gm, '')
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+        .replace(/[*_`]/g, '');
+      var first = plain.split(/\n\s*\n/).map(function (s) { return s.trim(); }).filter(Boolean)[0] || '';
+      return first.replace(/\s+/g, ' ').slice(0, 80);
+    }
+
+    function loadMarkdownFile(file) {
+      // 表单已经有内容时先确认，避免把写了一半的文章冲掉
+      if ($('md').value.trim() || $('f-title').value.trim()) {
+        if (!window.confirm('上传会覆盖当前表单里的标题和正文，继续吗？')) return Promise.resolve();
+      }
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onerror = function () { reject(new Error('文件读取失败')); };
+        reader.onload = function () {
+          try {
+            var text = String(reader.result || '')
+              .replace(/^\uFEFF/, '')                       // 去 BOM
+              .replace(/\r\n/g, '\n').replace(/\r/g, '\n'); // 统一换行，和"保留原 HTML"的判断保持一致
+
+            var parsed = parseFrontMatter(text);
+            var meta = parsed.meta;
+            var body = parsed.body;
+
+            // 标题优先级：front matter → 正文第一个 # 标题 → 文件名
+            var title = meta.title || '';
+            if (!title) {
+              var h = body.match(/^[ \t]*#[ \t]+(.+)$/m);
+              if (h) { title = h[1].trim(); body = body.replace(h[0], ''); }
+            }
+            if (!title) title = String(file.name || '').replace(/\.(md|markdown|txt)$/i, '');
+
+            // 日期只认 YYYY-MM-DD，缺就填今天
+            var date = String(meta.date || '').slice(0, 10);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = new Date().toISOString().slice(0, 10);
+
+            var excerpt = meta.excerpt || meta.description || meta.summary || autoExcerpt(body);
+            var mins = parseInt(meta.readingtime || meta.reading_time || meta.minutes, 10);
+
+            $('f-title').value = title;
+            $('f-date').value = date;
+            $('f-tags').value = (meta.tags || []).join(', ');
+            $('f-excerpt').value = excerpt;
+            $('f-id').value = meta.id || slugify(title);
+            if (mins > 0) $('f-min').value = mins;
+            $('md').value = body.replace(/^\n+/, '').replace(/\s+$/, '') + '\n';
+            renderPreview();
+
+            setStatus('已载入 ' + file.name + '：标题/日期/标签/摘要/网址 ID 都填好了，确认无误后点「发布到 GitHub」。', 'ok');
+            resolve();
+          } catch (e) { reject(e); }
+        };
+        reader.readAsText(file, 'utf-8');
       });
     }
 
@@ -1352,6 +1447,51 @@
           if (e && e.message === '__silent__') return;
           setStatus('插图失败：' + friendlyError(e), 'err');
         });
+      });
+
+      // 上传 Markdown：点按钮选文件
+      $('btn-upload-md').addEventListener('click', function () { $('md-file').click(); });
+      $('md-file').addEventListener('change', function () {
+        var f = this.files && this.files[0];
+        this.value = '';                       // 允许连续选同一个文件
+        if (!f) return;
+        loadMarkdownFile(f).catch(function (e) {
+          setStatus('读取失败：' + (e && e.message ? e.message : e), 'err');
+        });
+      });
+
+      // 拖进正文框：.md/.markdown/.txt 载入整篇，图片走插图
+      var mdBox = $('md');
+      function isMdFile(f) { return /\.(md|markdown|txt)$/i.test(f.name || ''); }
+      ['dragenter', 'dragover'].forEach(function (ev) {
+        mdBox.addEventListener(ev, function (e) {
+          if (!e.dataTransfer) return;
+          e.preventDefault(); e.stopPropagation();
+          mdBox.classList.add('is-drag');
+        });
+      });
+      ['dragleave', 'dragend'].forEach(function (ev) {
+        mdBox.addEventListener(ev, function () { mdBox.classList.remove('is-drag'); });
+      });
+      mdBox.addEventListener('drop', function (e) {
+        if (!e.dataTransfer) return;
+        e.preventDefault(); e.stopPropagation();
+        mdBox.classList.remove('is-drag');
+        var f = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (!f) return;
+        if (isMdFile(f)) {
+          loadMarkdownFile(f).catch(function (err) {
+            setStatus('读取失败：' + (err && err.message ? err.message : err), 'err');
+          });
+        } else if (/^image\//.test(f.type || '')) {
+          uploadPostImage(f).catch(function (err) {
+            stopTicker();
+            if (err && err.message === '__silent__') return;
+            setStatus('插图失败：' + friendlyError(err), 'err');
+          });
+        } else {
+          setStatus('只能拖入 .md / .markdown / .txt 或图片文件', 'err');
+        }
       });
 
       $('f-title').addEventListener('blur', function () {
