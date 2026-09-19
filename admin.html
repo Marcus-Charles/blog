@@ -472,6 +472,7 @@
           $('f-id').value = '';
           $('f-tags').value = '';
           renderPreview();
+          loadManage();
         })
         .catch(function (e) {
           var msg = (e && e.message) ? e.message : String(e);
@@ -642,6 +643,7 @@
         setToken($('token').value.trim());
         refreshTokenStatus();
         setStatus($('token').value.trim() ? 'Token 已保存在本机浏览器' : '已清除', 'ok');
+        if ($('token').value.trim()) loadManage();
       });
       $('btn-clear-token').addEventListener('click', function () {
         setToken('');
@@ -703,6 +705,9 @@
       });
 
       renderPreview();
+
+      // 已经存过 Token 的话，打开页面就直接把已发布文章列出来，省得再点一次
+      if (getToken()) loadManage();
     }
 
     if (document.readyState === 'loading') {
