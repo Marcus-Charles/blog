@@ -49,7 +49,12 @@
     var titleEl = document.getElementById('hero-title');
     var textEl = document.getElementById('hero-text');
     var bioEl = document.getElementById('hero-bio');
+    var avatarEl = document.getElementById('hero-avatar');
 
+    // 头像跟配置走，改 config.js 的 authorAvatar 即可全局生效
+    if (avatarEl && window.siteConfig.authorAvatar) {
+      avatarEl.setAttribute('src', siteUrl(window.siteConfig.authorAvatar));
+    }
     if (titleEl) {
       // {name} 占位符替换为作者名，转义后再替换，避免注入
       var safeName = escapeHtml(window.siteConfig.author || '');

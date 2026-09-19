@@ -11,9 +11,9 @@ window.siteConfig = {
   siteName: '白露记事',
   siteTagline: '记录技术、阅读与生活的碎片',
   siteDescription: '一个关于前端开发、读书笔记与日常思考的个人博客。',
-  author: '你的名字',          // 改成你自己的名字
-  authorBio: '前端工程师 / 长期主义者 / 业余读书人',
-  authorAvatar: 'assets/avatar.svg',
+  author: 'Marcus',
+  authorBio: '前端工程师 / 在杭州',
+  authorAvatar: 'assets/avatar.png',
   // 在 GitHub Pages 的项目站点下部署时，如果是 https://用户名.github.io/仓库名/，
   // 这里写 '/仓库名'；如果是 https://用户名.github.io/ 这种用户站点，保持空字符串。
   // 使用自定义域名时也保持空字符串。
@@ -34,11 +34,10 @@ window.siteConfig = {
 
   /* ---------- 社交链接 ---------- */
   // icon 可选值：github / twitter / mail / rss
+  // 没有的账号直接删掉那一行，别留占位地址（会变成打不开的死链）
   social: [
     { icon: 'github',  label: 'GitHub', href: 'https://github.com/Marcus-Charles' },
-    { icon: 'twitter', label: 'X',      href: 'https://x.com/yourname' },
-    { icon: 'mail',    label: '邮箱',   href: 'mailto:you@example.com' },
-    { icon: 'rss',     label: 'RSS',    href: 'rss.xml' }
+    { icon: 'mail',    label: '邮箱',   href: 'mailto:cai52894@outlook.com' }
   ],
 
   /* ---------- 首页文案 ---------- */

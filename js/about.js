@@ -10,22 +10,20 @@
   /* ------------------------------------------------------------------------
      在这里填写你自己的信息 —— 改完刷新即可生效
      ------------------------------------------------------------------------ */
+  // 下面这些内容随便改；某一块不想放，把数组清空即可（页面会自动隐藏那一块）
   var ABOUT = {
     bio: [
-      '你好，我是这个站的主人。白天写代码，晚上读点书，偶尔把想清楚的事情写下来。',
-      '这个博客从 2026 年开始更新。它的目标不是流量，而是把我那些散落在各处的笔记整理成能被人读懂的东西。如果你在这里看到了有用的内容，那很好；如果觉得写得不对，欢迎写信告诉我。'
+      '你好，我是 Marcus，一名前端工程师，现在在杭州。白天写代码，晚上读点书，偶尔把想清楚的事情写下来。',
+      '这个博客用来放技术笔记、读书记录和一些还没想清楚的问题。更新可能不快，但都是自己真想写的东西。觉得哪里写得不对，或者想聊点什么，发邮件给我就行。'
     ],
     skills: ['HTML / CSS', 'JavaScript', 'React', 'Node.js', 'Git', '性能优化'],
+    // 换成你自己的经历；不想要这一块就把数组清空（[]）
     timeline: [
-      { year: '2026', text: '重新开始写博客，把笔记从本地搬到线上。' },
-      { year: '2024', text: '转向前端基础设施方向，开始关注构建与性能。' },
-      { year: '2021', text: '进入互联网行业，从写下第一行业务代码算起。' },
-      { year: '2018', text: '大学里第一次用 HTML 做了个个人主页，那时觉得很有意思。' }
+      { year: '2026', text: '搭了这个博客，重新开始写东西。' }
     ],
     now: [
-      '正在读：《思考，快与慢》（第三遍了）',
-      '正在学：Rust 的所有权模型',
-      '正在做：把这个博客的写作流程再简化一点'
+      '在杭州做前端开发',
+      '把这个博客的写作流程再理顺一点'
     ]
   };
 
@@ -46,12 +44,21 @@
     var avatarEl = document.getElementById('about-avatar');
     if (avatarEl) avatarEl.setAttribute('src', siteUrl(cfg.authorAvatar || 'assets/avatar.svg'));
 
+    // 数组为空就整块隐藏，页面上不会剩下孤零零的标题
+    function toggle(sectionId, titleId, list) {
+      var titleEl = document.getElementById(titleId);
+      var sectionEl = document.getElementById(sectionId);
+      if (titleEl) titleEl.style.display = list.length ? '' : 'none';
+      if (sectionEl) sectionEl.style.display = list.length ? '' : 'none';
+    }
+
     var skillsEl = document.getElementById('about-skills');
     if (skillsEl) {
       skillsEl.innerHTML = ABOUT.skills.map(function (s) {
         return '<span class="tag">' + escapeHtml(s) + '</span>';
       }).join('');
     }
+    toggle('about-skills', 'about-skills-title', ABOUT.skills);
 
     var timelineEl = document.getElementById('about-timeline');
     if (timelineEl) {
@@ -61,6 +68,7 @@
           escapeHtml(item.year) + '</strong> ' + escapeHtml(item.text) + '</li>';
       }).join('');
     }
+    toggle('about-timeline', 'about-timeline-title', ABOUT.timeline);
 
     var nowEl = document.getElementById('about-now');
     if (nowEl) {
