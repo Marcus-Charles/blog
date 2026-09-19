@@ -23,7 +23,7 @@ window.posts = [
     "excerpt": "111",
     "cover": "",
     "readingTime": 5,
-    "content": "<h3>测试</h3>\n<p><img src=\"assets/posts/img-20260919-161553.jpg\" alt=\"OIP-C\" loading=\"lazy\"></p>"
+    "content": "<h3>测试</h3>\n<p><img src=\"assets/posts/img-20260919-161553.jpg\" alt=\"OIP-C\" loading=\"lazy\"> <img src=\"assets/posts/img-20260919-162611.jpg\" alt=\"1\" loading=\"lazy\"></p>"
   },
 {
     "id": "1",
