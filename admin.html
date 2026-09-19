@@ -207,7 +207,7 @@
     var FILE_PATH  = 'data/posts.js';
     var BRANCH     = 'main';
     var TOKEN_KEY  = 'blog-admin-token';
-    var VERSION    = 'v2026-09-19.4';   // 页面顶部显示，用来确认你看到的不是缓存旧版
+    var VERSION    = 'v2026-09-19.5';   // 页面顶部显示，用来确认你看到的不是缓存旧版
 
     var $ = function (id) { return document.getElementById(id); };
 
@@ -427,16 +427,43 @@
       ul.innerHTML = ids.map(function (i) { return '<li>' + esc(i) + '</li>'; }).join('');
     }
 
-    /* ---------- 带超时的 fetch：网络挂住时不能一直转圈 ---------- */
+    /* ---------- 带超时的 fetch：网络挂住时不能一直转圈 ----------
+       坑：只给"等响应头"设超时是不够的——响应头先到、body 一直不来时，
+       定时器已经清掉，同样会永久卡住。所以连读 body 一起纳入超时。      */
     function fetchWithTimeout(url, opts, ms) {
-      if (typeof AbortController === 'undefined') return fetch(url, opts);
-      var ctrl = new AbortController();
-      var timer = setTimeout(function () { ctrl.abort(); }, ms || 15000);
-      return fetch(url, Object.assign({}, opts, { signal: ctrl.signal }))
-        .then(function (r) { clearTimeout(timer); return r; })
-        .catch(function (e) {
-          clearTimeout(timer);
-          if (e && e.name === 'AbortError') throw new Error('TIMEOUT');
+      var limit = ms || 15000;
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = null;
+      var timedOut = false;
+
+      var guard = new Promise(function (_, reject) {
+        timer = setTimeout(function () {
+          timedOut = true;
+          if (ctrl) { try { ctrl.abort(); } catch (e) {} }
+          reject(new Error('TIMEOUT'));
+        }, limit);
+      });
+      function done() { if (timer) { clearTimeout(timer); timer = null; } }
+
+      var req = fetch(url, Object.assign({}, opts, ctrl ? { signal: ctrl.signal } : {}));
+
+      return Promise.race([req, guard])
+        .then(function (r) {
+          // 继续读 body，同样受 guard 约束
+          return Promise.race([r.text(), guard]).then(function (t) {
+            done();
+            return {
+              ok: r.ok,
+              status: r.status,
+              text: function () { return Promise.resolve(t); },
+              json: function () { return Promise.resolve(JSON.parse(t)); }
+            };
+          });
+        })
+        .then(function (v) { done(); return v; }, function (e) {
+          done();
+          if (timedOut) throw new Error('TIMEOUT');
+          if (e && (e.name === 'AbortError' || /abort/i.test(String(e.message)))) throw new Error('TIMEOUT');
           throw e;
         });
     }
