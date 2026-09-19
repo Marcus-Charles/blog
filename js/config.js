@@ -8,7 +8,7 @@
 
 window.siteConfig = {
   /* ---------- 基本信息 ---------- */
-  siteName: '白露记事',
+  siteName: "Marcus's blog",
   siteTagline: '记录技术、阅读与生活的碎片',
   siteDescription: '一个关于前端开发、读书笔记与日常思考的个人博客。',
   author: 'Marcus',
