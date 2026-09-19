@@ -62,37 +62,37 @@ window.photos = [
     src: 'assets/photos/img-01.jpg',
     alt: '照片',
     caption: '',
-    date: '2026-06-24'
+    date: '2025-06-24'
   },
   {
     src: 'assets/photos/img-03.jpg',
     alt: '照片',
     caption: '',
-    date: '2026-06-24'
+    date: '2026-05-25'
   },
   {
     src: 'assets/photos/img-05.jpg',
     alt: '照片',
     caption: '',
-    date: '2026-06-24'
+    date: '2025-01-24'
   },
   {
     src: 'assets/photos/img-06.jpg',
     alt: '照片',
     caption: '',
-    date: '2026-06-24'
+    date: '2026-05-25'
   },
   {
     src: 'assets/photos/img-07.jpg',
     alt: '照片',
     caption: '',
-    date: '2026-06-24'
+    date: '2024-11-24'
   },
   {
     src: 'assets/photos/img-08.jpg',
     alt: '照片',
     caption: '',
-    date: '2026-06-24'
+    date: '2026-05-25'
   },
   {
     src: 'assets/photos/img-10.jpg',
@@ -104,7 +104,7 @@ window.photos = [
     src: 'assets/photos/img-19.jpg',
     alt: '照片',
     caption: '',
-    date: '2026-06-24'
+    date: '2025-06-24'
   },
   {
     src: 'assets/photos/img-20.jpg',
@@ -140,6 +140,6 @@ window.photos = [
     src: 'assets/photos/img-15.jpg',
     alt: '照片',
     caption: '',
-    date: '2025-06-16'
+    date: '2026-06-16'
   }
 ];
