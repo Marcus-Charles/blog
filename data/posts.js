@@ -15,18 +15,6 @@
    ========================================================================== */
 
 window.posts = [
-{
-    "id": "1",
-    "title": "1",
-    "date": "2026-09-19",
-    "tags": [
-      "1"
-    ],
-    "excerpt": "1",
-    "cover": "",
-    "readingTime": 5,
-    "content": "<p>1</p>"
-  },
   {
     id: 'css-modern-layout',
     title: '现代 CSS 布局：Flexbox 与 Grid 该怎么选',
