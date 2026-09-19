@@ -45,7 +45,7 @@ window.photos = [
     "src": "assets/photos/img-22.jpg",
     "alt": "照片",
     "caption": "",
-    "date": "2026-06-25"
+    "date": "2024-06-25"
   },
   {
     "src": "assets/photos/img-01.jpg",
