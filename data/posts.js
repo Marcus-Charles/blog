@@ -16,6 +16,16 @@
 
 window.posts = [
 {
+    "id": "test",
+    "title": "test",
+    "date": "2026-09-19",
+    "tags": [],
+    "excerpt": "111",
+    "cover": "",
+    "readingTime": 5,
+    "content": "<h3>测试</h3>\n<p>111 <img src=\"assets/posts/img-20260919-161553.jpg\" alt=\"OIP-C\" loading=\"lazy\"></p>"
+  },
+{
     "id": "1",
     "title": "1",
     "date": "2026-09-19",
