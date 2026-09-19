@@ -180,7 +180,7 @@
       <h2>3 · 正文（Markdown）</h2>
       <div class="grid2">
         <div class="field">
-          <textarea id="md" placeholder="## 小标题&#10;&#10;正文段落，支持 **加粗**、*斜体*、`行内代码`、[链接](https://...)&#10;&#10;- 列表项&#10;- 列表项&#10;&#10;> 引用&#10;&#10;```&#10;代码块&#10;```"></textarea>
+          <textarea id="md" placeholder="## 小标题&#10;&#10;正文段落，支持 **加粗**、*斜体*、`行内代码`、[链接](https://...)&#10;&#10;插图：![图片说明](assets/posts/xxx.jpg)&#10;（也可点下方「插入图片」自动上传并插入）&#10;&#10;- 列表项&#10;- 列表项&#10;&#10;> 引用&#10;&#10;```&#10;代码块&#10;```"></textarea>
         </div>
         <div class="field">
           <label>实时预览</label>
@@ -190,6 +190,8 @@
       <div class="actions">
         <button class="btn btn--primary" id="btn-publish" type="button">发布到 GitHub</button>
         <button class="btn" id="btn-post-cancel" type="button" hidden>取消编辑</button>
+        <input type="file" id="img-file" accept="image/*" hidden>
+        <button class="btn" id="btn-insert-img" type="button">插入图片</button>
         <button class="btn" id="btn-copy" type="button">复制代码片段</button>
         <button class="btn" id="btn-download" type="button">下载片段文件</button>
         <button class="btn" id="btn-reset" type="button">清空</button>
@@ -250,7 +252,7 @@
     var FILE_PATH  = 'data/posts.js';
     var BRANCH     = 'main';
     var TOKEN_KEY  = 'blog-admin-token';
-    var VERSION    = 'v2026-09-19.8';   // 页面顶部显示，用来确认你看到的不是缓存旧版
+    var VERSION    = 'v2026-09-19.9';   // 页面顶部显示，用来确认你看到的不是缓存旧版
 
     var $ = function (id) { return document.getElementById(id); };
 
@@ -293,9 +295,12 @@
       // 行内代码先占位，避免被其他规则破坏
       var codes = [];
       out = out.replace(/`([^`]+)`/g, function (_, c) { codes.push(c); return '\u0000' + (codes.length - 1) + '\u0000'; });
+      // 图片必须排在链接之前：否则 ![说明](a.jpg) 里的 [说明](a.jpg) 会被链接规则吃掉
+      out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, '<img src="$2" alt="$1" loading="lazy">');
       out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
       out = out.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
-      out = out.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2">$1</a>');
+      // 站内相对路径（如 /about.html）也支持，不只是 http(s)
+      out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
       out = out.replace(/\u0000(\d+)\u0000/g, function (_, i) { return '<code>' + codes[Number(i)] + '</code>'; });
       return out;
     }
@@ -403,8 +408,13 @@
           .replace(/<i>([\s\S]*?)<\/i>/g, '*$1*')
           .replace(/<code>([\s\S]*?)<\/code>/g, '`$1`')
           .replace(/<a href="([^"]*)">([\s\S]*?)<\/a>/g, '[$2]($1)')
-          .replace(/<img\s+[^>]*alt="([^"]*)"[^>]*src="([^"]*)"[^>]*>/g, '![$1]($2)')
-          .replace(/<img\s+[^>]*src="([^"]*)"[^>]*>/g, '![$1]');
+          // 一次性处理 <img>：属性顺序任意（src 在前或在后都取得到），
+          // 旧写法在缺 alt 时会把 src 当成 alt，编辑往返会丢图
+          .replace(/<img\b[^>]*>/g, function (tag) {
+            var s = (tag.match(/\ssrc="([^"]*)"/) || [])[1] || '';
+            var a = (tag.match(/\salt="([^"]*)"/) || [])[1] || '';
+            return '![' + a + '](' + s + ')';
+          })
       }
       var out = [];
       var re = /<(h2|h3|h4|p|blockquote|pre|ul|ol)\b([^>]*)>([\s\S]*?)<\/\1>|<hr\s*\/?>/g;
@@ -525,6 +535,47 @@
       } catch (e) {
         $('preview').innerHTML = '<p style="color:#b42318">预览出错：' + esc(e.message) + '</p>';
       }
+    }
+
+    /* ---------- 正文插图：上传图片 + 插入 Markdown ---------- */
+    var POST_DIR = 'assets/posts';
+
+    // 在光标处插入文本（有选区则替换），插完立刻刷新预览
+    function insertAtCursor(text) {
+      var ta = $('md');
+      var start = (ta.selectionStart === null) ? ta.value.length : ta.selectionStart;
+      var end = (ta.selectionEnd === null) ? ta.value.length : ta.selectionEnd;
+      ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
+      var pos = start + text.length;
+      try { ta.setSelectionRange(pos, pos); ta.focus(); } catch (e) {}
+      renderPreview();
+    }
+
+    // 用时间戳命名：不必先列目录，也不会和已有图片撞名
+    function nextPostImageName() {
+      var d = new Date();
+      function pad(n) { return String(n).padStart(2, '0'); }
+      return 'img-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) +
+        '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()) + '.jpg';
+    }
+
+    function uploadPostImage(file) {
+      // alt 默认取原文件名（去扩展名），方便无障碍阅读；用户可以再手改
+      var alt = String(file.name || '图片').replace(/\.[^.]+$/, '') || '图片';
+      var name = nextPostImageName();
+      var path = POST_DIR + '/' + name;
+      startTicker('正在压缩并上传图片', 30);
+      return compressImage(file, 1600, 0.82).then(function (dataUrl) {
+        return api(path, {
+          method: 'PUT',
+          body: JSON.stringify({ message: 'post: add image ' + name, content: dataUrlToB64(dataUrl), branch: BRANCH })
+        });
+      }).then(function () {
+        stopTicker();
+        setStatus('图片已上传到 ' + path + '，约 1 分钟后线上生效。', 'ok');
+        insertAtCursor('![' + alt + '](' + path + ')\n\n');
+        return path;
+      });
     }
 
     /* ---------- 已有文章列表 ---------- */
@@ -1289,6 +1340,20 @@
       });
 
       $('md').addEventListener('input', renderPreview);
+
+      // 插图：点按钮 → 弹出选文件 → 上传后在光标处插入 ![alt](path)
+      $('btn-insert-img').addEventListener('click', function () { $('img-file').click(); });
+      $('img-file').addEventListener('change', function () {
+        var f = this.files && this.files[0];
+        this.value = '';                       // 允许连续选同一张图
+        if (!f) return;
+        uploadPostImage(f).catch(function (e) {
+          stopTicker();
+          if (e && e.message === '__silent__') return;
+          setStatus('插图失败：' + friendlyError(e), 'err');
+        });
+      });
+
       $('f-title').addEventListener('blur', function () {
         if (!$('f-id').value.trim() && $('f-title').value.trim()) {
           $('f-id').value = slugify($('f-title').value);
