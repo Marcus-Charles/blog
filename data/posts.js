@@ -15,6 +15,19 @@
    ========================================================================== */
 
 window.posts = [
+{
+    "id": "韦根论文逻辑",
+    "title": "韦根论文逻辑",
+    "date": "2026-09-19",
+    "tags": [
+      "韦根",
+      "小论文"
+    ],
+    "excerpt": "I. Introduction II. Operating Principle and System Architect…",
+    "cover": "",
+    "readingTime": 5,
+    "content": "<h3>I. Introduction</h3>\n<h3>II. Operating Principle and System Architecture</h3>\n<p>A. System Architecture B. Wiegand-Based Sensing Principle C. Dual-Use Wiegand Pulse</p>\n<h3>III. Wiegand-Based Rotational Sensing and Energy Harvesting</h3>\n<p>A. Wiegand Pulse Characteristics B. Rotational Speed–Pulse Frequency Relationship C. Pulse Energy and Harvested Power</p>\n<h3>IV. Ultra-Low-Power Rotational Speed Measurement Circuit</h3>\n<p>A. RPM Measurement Method B. Circuit Design C. Low-Power Operation D. Measurement Error Analysis</p>\n<h3>V. Self-Powered Wireless Sensing System</h3>\n<p>A. Energy Storage and Management B. Hysteretic Power Control C. BLE Communication D. System Energy Budget</p>\n<h3>VI. Experimental Results and Discussion</h3>\n<p>A. Experimental Setup B. RPM Measurement Performance C. Power Consumption D. Energy Harvesting Performance E. Self-Powered Wireless Operation F. Comparison With Existing Methods</p>\n<h3>VII. Conclusion</h3>"
+  },
   {
     id: 'css-modern-layout',
     title: '现代 CSS 布局：Flexbox 与 Grid 该怎么选',
