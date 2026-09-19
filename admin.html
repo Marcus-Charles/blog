@@ -185,8 +185,8 @@
     <section class="panel">
       <h2>4 · 已发布文章（删除）</h2>
       <div class="actions">
-        <button class="btn" id="btn-load-manage" type="button">加载列表</button>
-        <span class="existing">列表直接读 GitHub 上的 <code>data/posts.js</code>；删除会提交一次 commit，约 1 分钟后线上生效。</span>
+        <button class="btn" id="btn-load-manage" type="button">刷新列表</button>
+        <span class="existing">列表读本站的 <code>data/posts.js</code>（不联网也能看到）；点「删除」时才调 GitHub API，15 秒没响应会明确报错。</span>
       </div>
       <div id="mgr-list" style="margin-top:var(--space-md)"></div>
     </section>
@@ -402,6 +402,38 @@
       ul.innerHTML = ids.map(function (i) { return '<li>' + esc(i) + '</li>'; }).join('');
     }
 
+    /* ---------- 带超时的 fetch：网络挂住时不能一直转圈 ---------- */
+    function fetchWithTimeout(url, opts, ms) {
+      if (typeof AbortController === 'undefined') return fetch(url, opts);
+      var ctrl = new AbortController();
+      var timer = setTimeout(function () { ctrl.abort(); }, ms || 15000);
+      return fetch(url, Object.assign({}, opts, { signal: ctrl.signal }))
+        .then(function (r) { clearTimeout(timer); return r; })
+        .catch(function (e) {
+          clearTimeout(timer);
+          if (e && e.name === 'AbortError') throw new Error('TIMEOUT');
+          throw e;
+        });
+    }
+
+    /* ---------- 把技术错误翻成人话 ---------- */
+    function friendlyError(e) {
+      var msg = (e && e.message) ? e.message : String(e);
+      if (msg === 'TIMEOUT' || /timeout|timed out/i.test(msg)) {
+        return '请求超时（15 秒没响应）：本机浏览器连不上 api.github.com，多半是国内网络/代理拦截。' +
+               '→ 点第 1 步的「测试网络连通」确认；确定不通就改用「复制代码片段」/「下载片段文件」，或直接在 GitHub 网页改 data/posts.js。';
+      }
+      if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) {
+        return '网络层面失败（Failed to fetch）：本机浏览器连不上 api.github.com，多半是国内网络/代理拦截。' +
+               '→ 点第 1 步的「测试网络连通」确认；确定不通就改用「复制代码片段」/「下载片段文件」，或直接在 GitHub 网页改 data/posts.js。';
+      }
+      if (/401|Bad credentials/i.test(msg)) return 'Token 无效或已过期：请重新生成并粘到第 1 步的输入框。';
+      if (/403|Resource not accessible/i.test(msg)) return 'Token 权限不足：需要勾选这个仓库的 Contents: Read and write。';
+      if (/^HTTP 404/.test(msg) || /404/i.test(msg)) return '找不到文件或仓库：检查 Token 是否能访问该仓库。';
+      if (/conflict|sha/i.test(msg)) return '远端文件已被改动（sha 不匹配）：刷新页面重新加载列表再试。';
+      return msg;
+    }
+
     /* ---------- 发布 ---------- */
     function api(path, opts) {
       var token = $('token').value.trim() || getToken();
@@ -412,9 +444,11 @@
         'X-GitHub-Api-Version': '2022-11-28'
       };
       if (opts && opts.body) headers['Content-Type'] = 'application/json';
-      return fetch('https://api.github.com/repos/' + REPO_OWNER + '/' + REPO_NAME + '/contents/' + path,
-        Object.assign({}, opts, { headers: headers }))
-        .then(function (r) {
+      return fetchWithTimeout(
+        'https://api.github.com/repos/' + REPO_OWNER + '/' + REPO_NAME + '/contents/' + path,
+        Object.assign({}, opts, { headers: headers }),
+        15000
+      ).then(function (r) {
           return r.json().then(function (j) {
             if (!r.ok) throw new Error((j && j.message) ? j.message : ('HTTP ' + r.status));
             return j;
@@ -475,19 +509,7 @@
           loadManage();
         })
         .catch(function (e) {
-          var msg = (e && e.message) ? e.message : String(e);
-          if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) {
-            msg = '网络层面失败（Failed to fetch）：本机浏览器连不上 api.github.com。' +
-                  '常见原因是国内网络拦截、代理或公司防火墙。' +
-                  '→ 点上面「测试网络连通」确认；确认不通就用「复制代码片段」或「下载片段文件」手动发布。';
-          } else if (/401|Bad credentials/i.test(msg)) {
-            msg = 'Token 无效或已过期：请重新生成并粘到上面的输入框。';
-          } else if (/403|Resource not accessible/i.test(msg)) {
-            msg = 'Token 权限不足：需要勾选这个仓库的 Contents: Read and write。';
-          } else if (/404/i.test(msg)) {
-            msg = '找不到文件或仓库：检查 Token 是否能访问该仓库。';
-          }
-          setStatus('失败：' + msg, 'err');
+          setStatus('失败：' + friendlyError(e), 'err');
         })
         .then(function () { btn.disabled = false; });
     }
@@ -550,39 +572,56 @@
     }
 
     /* ---------- 已发布文章：加载 / 删除 ---------- */
+    // 渲染列表（source 只用于底部提示文案）
+    function renderManage(src, source) {
+      var box = $('mgr-list');
+      var entries = parseEntries(src);
+      renderExisting(listIds(src));
+      if (!entries.length) {
+        box.innerHTML = '<p class="admin__sub">没有解析到文章，文件结构可能有变化。</p>';
+        return;
+      }
+      box.innerHTML = entries.map(function (e) {
+        return '<div class="post-row" data-id="' + esc(e.id) + '">' +
+                 '<div class="post-row__meta">' +
+                   '<strong>' + esc(e.title) + '</strong>' +
+                   '<span>' + esc(e.date) + ' · <code>' + esc(e.id) + '</code></span>' +
+                 '</div>' +
+                 '<button class="btn btn--danger" type="button">删除</button>' +
+               '</div>';
+      }).join('') +
+      '<p class="admin__sub" style="margin-top:12px">共 ' + entries.length + ' 篇（来源：' + esc(source) + '）。' +
+      '删除需要联网调 GitHub API，超时会明确报错，不会一直转圈。</p>';
+      Array.prototype.forEach.call(box.querySelectorAll('.post-row'), function (row) {
+        row.querySelector('button').onclick = function () {
+          removePost(row.getAttribute('data-id'));
+        };
+      });
+    }
+
+    function showManageError(e) {
+      $('mgr-list').innerHTML =
+        '<p class="admin__sub" style="color:#b42318">读取失败：' + esc(friendlyError(e)) + '</p>';
+    }
+
+    // 先看本站自己的 data/posts.js（同源，不走 GitHub API，秒开）；
+    // 读不到（例如用 file:// 直接打开）才回退到 GitHub API。
     function loadManage() {
       var box = $('mgr-list');
-      box.innerHTML = '<p class="admin__sub">正在读取 GitHub 上的文件…</p>';
-      api(FILE_PATH, { method: 'GET' })
-        .then(function (file) {
-          var src = fromB64(file.content);
-          var entries = parseEntries(src);
-          renderExisting(listIds(src));
-          if (!entries.length) {
-            box.innerHTML = '<p class="admin__sub">没有解析到文章，文件结构可能有变化。</p>';
-            return;
-          }
-          box.innerHTML = entries.map(function (e) {
-            return '<div class="post-row" data-id="' + esc(e.id) + '">' +
-                     '<div class="post-row__meta">' +
-                       '<strong>' + esc(e.title) + '</strong>' +
-                       '<span>' + esc(e.date) + ' · <code>' + esc(e.id) + '</code></span>' +
-                     '</div>' +
-                     '<button class="btn btn--danger" type="button">删除</button>' +
-                   '</div>';
-          }).join('');
-          Array.prototype.forEach.call(box.querySelectorAll('.post-row'), function (row) {
-            row.querySelector('button').onclick = function () {
-              removePost(row.getAttribute('data-id'));
-            };
-          });
+      box.innerHTML = '<p class="admin__sub">正在读取…</p>';
+      fetchWithTimeout('data/posts.js?t=' + Date.now(), { cache: 'no-store' }, 8000)
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.text();
         })
-        .catch(function (e) {
-          var msg = (e && e.message) ? e.message : String(e);
-          if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) {
-            msg = '连不上 api.github.com（Failed to fetch）。若确认本机访问不了，请用第 1 步的「测试网络连通」确认，然后改用 GitHub 网页手动删除。';
-          }
-          box.innerHTML = '<p class="admin__sub" style="color:#b42318">读取失败：' + esc(msg) + '</p>';
+        .then(function (src) {
+          if (src.indexOf('window.posts') === -1) throw new Error('内容不是 posts.js');
+          renderManage(src, '本站线上文件');
+        })
+        .catch(function () {
+          api(FILE_PATH, { method: 'GET' })
+            .then(function (file) { renderManage(fromB64(file.content), 'GitHub API'); })
+            .catch(showManageError);
         });
     }
 
@@ -612,7 +651,7 @@
           loadManage();
         })
         .catch(function (e) {
-          setStatus('删除失败：' + ((e && e.message) ? e.message : String(e)), 'err');
+          setStatus('删除失败：' + friendlyError(e), 'err');
           loadManage();
         });
     }
@@ -665,15 +704,15 @@
         b.disabled = true;
         setStatus('正在测试 api.github.com …', 'info');
         var started = Date.now();
-        fetch('https://api.github.com', { headers: { 'Accept': 'application/vnd.github+json' } })
+        fetchWithTimeout('https://api.github.com',
+          { headers: { 'Accept': 'application/vnd.github+json' } }, 10000)
           .then(function (r) {
             return r.json().then(function () {
               setStatus('连通正常（' + (Date.now() - started) + 'ms）。若发布仍失败，多半是 Token 权限或有效期问题。', 'ok');
             });
           })
           .catch(function (e) {
-            setStatus('连不上 api.github.com：' + e.message +
-              ' —— 本机网络/代理拦截了请求，请改用「复制代码片段」或「下载片段文件」发布。', 'err');
+            setStatus('连不上 api.github.com：' + friendlyError(e), 'err');
           })
           .then(function () { b.disabled = false; });
       });
