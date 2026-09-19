@@ -102,6 +102,19 @@
 
     .existing { font-size: .8125rem; color: var(--text-faint); }
     .existing ul { margin: 4px 0 0; padding-left: 1.2em; max-height: 160px; overflow-y: auto; }
+
+    .btn--danger { color: #b42318; border-color: #f0b4ae; }
+    .btn--danger:hover { background: #fdecea; border-color: #b42318; color: #b42318; }
+
+    .post-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--space-md); padding: 10px 0; border-top: 1px solid var(--border);
+    }
+    .post-row:first-child { border-top: 0; }
+    .post-row__meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .post-row__meta strong { font-size: .9375rem; }
+    .post-row__meta span { color: var(--text-faint); font-size: .75rem; word-break: break-all; }
+    .post-row > .btn { flex: none; padding: 6px 14px; font-size: .8125rem; }
   </style>
 </head>
 <body>
@@ -168,9 +181,19 @@
       <div class="status" id="status"></div>
     </section>
 
+    <!-- 第四步：管理已发布文章 -->
+    <section class="panel">
+      <h2>4 · 已发布文章（删除）</h2>
+      <div class="actions">
+        <button class="btn" id="btn-load-manage" type="button">加载列表</button>
+        <span class="existing">列表直接读 GitHub 上的 <code>data/posts.js</code>；删除会提交一次 commit，约 1 分钟后线上生效。</span>
+      </div>
+      <div id="mgr-list" style="margin-top:var(--space-md)"></div>
+    </section>
+
     <details class="tips">
-      <summary>已有文章（避免 ID 重复）</summary>
-      <div class="existing"><ul id="existing-list"><li>点「发布」前会自动检查</li></ul></div>
+      <summary>已有文章 ID（避免重复）</summary>
+      <div class="existing"><ul id="existing-list"><li>点「发布」时会自动检查</li></ul></div>
     </details>
   </main>
 
@@ -365,9 +388,10 @@
     }
 
     /* ---------- 已有文章列表 ---------- */
+    // 注意：样例文章用单引号 id: 'xxx'，发布生成的用双引号 "id": "xxx"，两种都要认
     function listIds(src) {
       var ids = [];
-      var re = /id:\s*'([^']+)'/g;
+      var re = /(?:"id"|id)\s*:\s*['"]([^'"]+)['"]/g;
       var m;
       while ((m = re.exec(src)) !== null) ids.push(m[1]);
       return ids;
@@ -467,6 +491,131 @@
         .then(function () { btn.disabled = false; });
     }
 
+    /* ---------- 源文件切分：把 window.posts = [...] 拆成一个个条目 ---------- */
+    // 正文里可能有引号、反引号模板字符串，所以要用「跳过字符串 + 括号配对」来切，不能用简单正则
+    function skipStr(s, i) {
+      var q = s.charAt(i);
+      i++;
+      while (i < s.length) {
+        if (s.charAt(i) === '\\') { i += 2; continue; }
+        if (s.charAt(i) === q) return i + 1;
+        i++;
+      }
+      return i;
+    }
+    function matchBrace(s, open) {
+      var depth = 0, i = open;
+      while (i < s.length) {
+        var c = s.charAt(i);
+        if (c === '"' || c === "'" || c === '`') { i = skipStr(s, i); continue; }
+        if (c === '{') depth++;
+        else if (c === '}') { depth--; if (depth === 0) return i; }
+        i++;
+      }
+      return -1;
+    }
+    function parseEntries(src) {
+      var m = src.match(/window\.posts\s*=\s*\[/);
+      if (!m) return [];
+      var i = m.index + m[0].length;
+      var out = [];
+      while (i < src.length) {
+        while (i < src.length && /[\s,]/.test(src.charAt(i))) i++;
+        if (src.charAt(i) === ']') break;
+        if (src.charAt(i) !== '{') { i++; continue; }
+        var start = i;
+        var end = matchBrace(src, start);
+        if (end === -1) break;
+        var text = src.slice(start, end + 1);
+        var idm = text.match(/(?:"id"|id)\s*:\s*['"]([^'"]+)['"]/);
+        var tm  = text.match(/(?:"title"|title)\s*:\s*['"]([\s\S]*?)['"]\s*,/);
+        var dm  = text.match(/(?:"date"|date)\s*:\s*['"]([^'"]+)['"]/);
+        out.push({
+          id: idm ? idm[1] : '',
+          title: tm ? tm[1] : (idm ? idm[1] : '(无标题)'),
+          date: dm ? dm[1] : '',
+          start: start,
+          end: end + 1
+        });
+        i = end + 1;
+      }
+      return out;
+    }
+    // 删掉整个对象（含它后面的逗号），保留其余内容和缩进
+    function removeEntry(src, entry) {
+      var before = src.slice(0, entry.start).replace(/\s+$/, '\n');
+      var after = src.slice(entry.end).replace(/^\s*,\s*/, '  ');
+      return before + after;
+    }
+
+    /* ---------- 已发布文章：加载 / 删除 ---------- */
+    function loadManage() {
+      var box = $('mgr-list');
+      box.innerHTML = '<p class="admin__sub">正在读取 GitHub 上的文件…</p>';
+      api(FILE_PATH, { method: 'GET' })
+        .then(function (file) {
+          var src = fromB64(file.content);
+          var entries = parseEntries(src);
+          renderExisting(listIds(src));
+          if (!entries.length) {
+            box.innerHTML = '<p class="admin__sub">没有解析到文章，文件结构可能有变化。</p>';
+            return;
+          }
+          box.innerHTML = entries.map(function (e) {
+            return '<div class="post-row" data-id="' + esc(e.id) + '">' +
+                     '<div class="post-row__meta">' +
+                       '<strong>' + esc(e.title) + '</strong>' +
+                       '<span>' + esc(e.date) + ' · <code>' + esc(e.id) + '</code></span>' +
+                     '</div>' +
+                     '<button class="btn btn--danger" type="button">删除</button>' +
+                   '</div>';
+          }).join('');
+          Array.prototype.forEach.call(box.querySelectorAll('.post-row'), function (row) {
+            row.querySelector('button').onclick = function () {
+              removePost(row.getAttribute('data-id'));
+            };
+          });
+        })
+        .catch(function (e) {
+          var msg = (e && e.message) ? e.message : String(e);
+          if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) {
+            msg = '连不上 api.github.com（Failed to fetch）。若确认本机访问不了，请用第 1 步的「测试网络连通」确认，然后改用 GitHub 网页手动删除。';
+          }
+          box.innerHTML = '<p class="admin__sub" style="color:#b42318">读取失败：' + esc(msg) + '</p>';
+        });
+    }
+
+    function removePost(id) {
+      if (!window.confirm('确定删除文章「' + id + '」？\n这会向仓库提交一次删除 commit，约 1 分钟后线上生效。')) return;
+      setStatus('正在读取远端文件…', 'info');
+      api(FILE_PATH, { method: 'GET' })
+        .then(function (file) {
+          var src = fromB64(file.content);
+          var target = null;
+          parseEntries(src).forEach(function (e) { if (e.id === id) target = e; });
+          if (!target) throw new Error('没找到 id 为「' + id + '」的文章，可能已经被删了');
+          var newSrc = removeEntry(src, target);
+          setStatus('正在提交删除…', 'info');
+          return api(FILE_PATH, {
+            method: 'PUT',
+            body: JSON.stringify({
+              message: 'chore: remove post ' + id,
+              content: toB64(newSrc),
+              sha: file.sha,
+              branch: BRANCH
+            })
+          });
+        })
+        .then(function () {
+          setStatus('已删除「' + id + '」，约 1 分钟后线上生效。', 'ok');
+          loadManage();
+        })
+        .catch(function (e) {
+          setStatus('删除失败：' + ((e && e.message) ? e.message : String(e)), 'err');
+          loadManage();
+        });
+    }
+
     /* ---------- 复制片段 ---------- */
     function copySnippet() {
       try {
@@ -545,6 +694,7 @@
 
       $('btn-publish').addEventListener('click', publish);
       $('btn-copy').addEventListener('click', copySnippet);
+      $('btn-load-manage').addEventListener('click', loadManage);
       $('btn-reset').addEventListener('click', function () {
         ['f-title', 'f-excerpt', 'f-id', 'f-tags', 'md'].forEach(function (id) { $(id).value = ''; });
         $('f-date').value = new Date().toISOString().slice(0, 10);
