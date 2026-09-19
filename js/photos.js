@@ -5,9 +5,26 @@
 (function () {
   'use strict';
 
-  var list = window.photos || [];
+  var list = (window.photos || []).slice();
   var current = 0;            // 当前大图索引
   var lastFocused = null;     // 打开灯箱前的焦点元素，关闭后还回去
+
+  /* 按拍摄时间（date 字段）倒序排列；同日保持原顺序（稳定排序） */
+  list.forEach(function (p, i) { p.__i = i; });
+  list.sort(function (a, b) {
+    var da = (a.date || '').replace(/-/g, '');
+    var db = (b.date || '').replace(/-/g, '');
+    if (da === db) return a.__i - b.__i;
+    return db < da ? -1 : 1; // 日期新在前
+  });
+
+  /* 时间分格：取「年-月」做分组键 */
+  function groupKey(p) { return (p.date || '').slice(0, 7); }   // YYYY-MM
+  function groupLabel(key) {
+    if (!key) return '未注明时间';
+    var y = key.slice(0, 4), m = key.slice(5, 7);
+    return y + ' 年 ' + (m ? (Number(m) + ' 月') : '');
+  }
 
   /* ------------------------------------------------------------------------
      渲染照片墙
@@ -19,28 +36,37 @@
     if (!grid) return;
 
     if (countEl) {
-      countEl.textContent = list.length ? '共 ' + list.length + ' 张 · 点击任意一张看大图' : '';
+      countEl.textContent = list.length ? '共 ' + list.length + ' 张 · 按时间分组 · 点击任意一张看大图' : '';
     }
     if (emptyEl) emptyEl.hidden = list.length > 0;
     if (!list.length) return;
 
-    grid.innerHTML = list.map(function (p, i) {
-      return '<li class="photo-card">' +
+    // 按「年-月」分格：每个月一行标题，下面跟着当月照片
+    var html = '';
+    var lastKey = '__init__';
+    list.forEach(function (p, i) {
+      var key = groupKey(p);
+      if (key !== lastKey) {
+        var cnt = 0;
+        for (var k = 0; k < list.length; k++) if (groupKey(list[k]) === key) cnt++;
+        html += '<li class="photo-group-header"><h2>' + escapeHtml(groupLabel(key)) +
+                '</h2><span class="photo-group-count">' + cnt + ' 张</span></li>';
+        lastKey = key;
+      }
+      html += '<li class="photo-card">' +
         '<button type="button" class="photo-card__btn" data-index="' + i + '"' +
         ' aria-label="查看大图：' + escapeHtml(p.alt || ('照片 ' + (i + 1))) + '">' +
-          // loading=lazy：不在这个视口里的图先不加载，首屏更快
           '<img src="' + escapeHtml(siteUrl(p.src)) + '"' +
           ' alt="' + escapeHtml(p.alt || '') + '"' +
           ' loading="lazy" decoding="async">' +
-          (p.caption || p.date
-            ? '<span class="photo-card__meta">' +
-                (p.caption ? '<span class="photo-card__caption">' + escapeHtml(p.caption) + '</span>' : '') +
-                (p.date ? '<span class="photo-card__date">' + escapeHtml(p.date) + '</span>' : '') +
-              '</span>'
+          (p.caption
+            ? '<span class="photo-card__meta"><span class="photo-card__caption">' +
+              escapeHtml(p.caption) + '</span></span>'
             : '') +
         '</button>' +
       '</li>';
-    }).join('');
+    });
+    grid.innerHTML = html;
 
     // 用 onclick 赋值而不是 addEventListener：重复渲染也不会叠加热监听器
     Array.prototype.forEach.call(grid.querySelectorAll('.photo-card__btn'), function (btn) {

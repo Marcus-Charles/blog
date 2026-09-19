@@ -782,6 +782,27 @@ a.tag:hover { text-decoration: none; filter: brightness(.95); }
   .photo-grid { grid-template-columns: 1fr; }
 }
 
+/* 时间分格标题：跨满整行，作为当月照片的分隔 */
+.photo-group-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  margin-top: var(--space-xl);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border);
+}
+.photo-group-header:first-child { margin-top: 0; }
+.photo-group-header h2 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 650;
+  letter-spacing: .01em;
+}
+.photo-group-count {
+  font-size: .8125rem;
+  color: var(--text-faint);
+}
 .photo-card { margin: 0; }
 
 .photo-card__btn {
