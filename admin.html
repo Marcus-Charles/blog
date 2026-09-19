@@ -120,7 +120,7 @@
 <body>
   <main class="admin">
     <h1>写文章</h1>
-    <p class="admin__sub">用 Markdown 写，点「发布」直接提交到 GitHub，约 1 分钟后线上生效。</p>
+    <p class="admin__sub">用 Markdown 写，点「发布」直接提交到 GitHub，约 1 分钟后线上生效。<span id="ver" style="color:var(--accent);font-weight:600"></span></p>
 
     <!-- 第一步：Token -->
     <section class="panel">
@@ -189,6 +189,7 @@
         <span class="existing">列表读本站的 <code>data/posts.js</code>（不联网也能看到）；点「删除」时才调 GitHub API，15 秒没响应会明确报错。</span>
       </div>
       <div id="mgr-list" style="margin-top:var(--space-md)"></div>
+      <div class="status" id="manage-status"></div>
     </section>
 
     <details class="tips">
@@ -206,6 +207,7 @@
     var FILE_PATH  = 'data/posts.js';
     var BRANCH     = 'main';
     var TOKEN_KEY  = 'blog-admin-token';
+    var VERSION    = 'v2026-09-19.4';   // 页面顶部显示，用来确认你看到的不是缓存旧版
 
     var $ = function (id) { return document.getElementById(id); };
 
@@ -371,10 +373,33 @@
     }
 
     /* ---------- 状态 ---------- */
+    // 两个提示框同时写：一个在第 3 步面板，一个在第 4 步面板，
+    // 否则滚到第 4 步操作时，报错显示在屏幕上方根本看不见
+    function statusEls() {
+      return [$('status'), $('manage-status')].filter(Boolean);
+    }
+    function paint(cls, text) {
+      statusEls().forEach(function (el) { el.className = cls; el.textContent = text; });
+    }
     function setStatus(msg, kind) {
-      var el = $('status');
-      el.className = 'status is-' + (kind || 'info');
-      el.textContent = msg;
+      stopTicker();
+      paint('status is-' + (kind || 'info'), msg);
+    }
+
+    // 等待时显示已等待秒数，避免"干等不知道还要多久"
+    var ticker = null;
+    function stopTicker() {
+      if (ticker) { clearInterval(ticker); ticker = null; }
+    }
+    function startTicker(msg, maxSec) {
+      stopTicker();
+      var t0 = Date.now();
+      var limit = maxSec || 15;
+      paint('status is-info', msg + '（已等待 0s / 最多 ' + limit + 's）');
+      ticker = setInterval(function () {
+        var s = Math.round((Date.now() - t0) / 1000);
+        paint('status is-info', msg + '（已等待 ' + s + 's / 最多 ' + limit + 's）');
+      }, 1000);
     }
 
     /* ---------- 预览 ---------- */
@@ -459,7 +484,7 @@
     function publish() {
       var btn = $('btn-publish');
       btn.disabled = true;
-      setStatus('正在读取远端文件…', 'info');
+      startTicker('正在读取远端文件', 15);
 
       var entry;
       try { entry = buildEntry(); } catch (e) {
@@ -484,7 +509,7 @@
 
           var newSrc = src.slice(0, insertAt) + '\n' + entryToSource(entry) + ',' + src.slice(insertAt);
 
-          setStatus('正在提交…', 'info');
+          startTicker('正在提交', 15);
           return api(FILE_PATH, {
             method: 'PUT',
             body: JSON.stringify({
@@ -627,7 +652,9 @@
 
     function removePost(id) {
       if (!window.confirm('确定删除文章「' + id + '」？\n这会向仓库提交一次删除 commit，约 1 分钟后线上生效。')) return;
-      setStatus('正在读取远端文件…', 'info');
+      // 操作期间禁用所有删除按钮，防止重复点击
+      Array.prototype.forEach.call(document.querySelectorAll('#mgr-list button'), function (b) { b.disabled = true; });
+      startTicker('正在读取远端文件', 15);
       api(FILE_PATH, { method: 'GET' })
         .then(function (file) {
           var src = fromB64(file.content);
@@ -635,7 +662,7 @@
           parseEntries(src).forEach(function (e) { if (e.id === id) target = e; });
           if (!target) throw new Error('没找到 id 为「' + id + '」的文章，可能已经被删了');
           var newSrc = removeEntry(src, target);
-          setStatus('正在提交删除…', 'info');
+          startTicker('正在提交删除', 15);
           return api(FILE_PATH, {
             method: 'PUT',
             body: JSON.stringify({
@@ -673,6 +700,8 @@
 
     /* ---------- 初始化 ---------- */
     function init() {
+      var ver = $('ver');
+      if (ver) ver.textContent = '  ·  ' + VERSION;
       $('f-date').value = new Date().toISOString().slice(0, 10);
       var saved = getToken();
       if (saved) $('token').value = saved;
