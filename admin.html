@@ -189,6 +189,7 @@
       </div>
       <div class="actions">
         <button class="btn btn--primary" id="btn-publish" type="button">发布到 GitHub</button>
+        <button class="btn" id="btn-post-cancel" type="button" hidden>取消编辑</button>
         <button class="btn" id="btn-copy" type="button">复制代码片段</button>
         <button class="btn" id="btn-download" type="button">下载片段文件</button>
         <button class="btn" id="btn-reset" type="button">清空</button>
@@ -198,10 +199,10 @@
 
     <!-- 第四步：管理已发布文章 -->
     <section class="panel">
-      <h2>4 · 已发布文章（删除）</h2>
+      <h2>4 · 已发布文章（改 / 删）</h2>
       <div class="actions">
         <button class="btn" id="btn-load-manage" type="button">刷新列表</button>
-        <span class="existing">列表读本站的 <code>data/posts.js</code>（不联网也能看到）；点「删除」时才调 GitHub API，15 秒没响应会明确报错。</span>
+        <span class="existing">列表读本站的 <code>data/posts.js</code>（不联网也能看到）；点「改 / 删」时才调 GitHub API，15 秒没响应会明确报错。</span>
       </div>
       <div id="mgr-list" style="margin-top:var(--space-md)"></div>
       <div class="status" id="manage-status"></div>
@@ -249,7 +250,7 @@
     var FILE_PATH  = 'data/posts.js';
     var BRANCH     = 'main';
     var TOKEN_KEY  = 'blog-admin-token';
-    var VERSION    = 'v2026-09-19.6';   // 页面顶部显示，用来确认你看到的不是缓存旧版
+    var VERSION    = 'v2026-09-19.8';   // 页面顶部显示，用来确认你看到的不是缓存旧版
 
     var $ = function (id) { return document.getElementById(id); };
 
@@ -326,7 +327,13 @@
         var fence = line.match(/^```(\w*)\s*$/);
         if (fence) {
           if (!inCode) { flushAll(); inCode = true; codeLang = fence[1] || ''; html += '<pre><code>'; }
-          else { inCode = false; html += '</code></pre>\n'; }
+          else {
+            inCode = false;
+            // 每行代码都是 esc(line)+'\n'，收尾时去掉最后一个换行，
+            // 否则 </code> 前会多一个空行：编辑往返后 <pre> 底部多出一行空白
+            if (/\n$/.test(html)) html = html.slice(0, -1);
+            html += '</code></pre>\n';
+          }
           continue;
         }
         if (inCode) { html += esc(line) + '\n'; continue; }
@@ -357,7 +364,14 @@
         if (ul || ol) {
           flushPara();
           var want = ul ? 'ul' : 'ol';
-          if (listType !== want) { flushList(); html += '<' + want + '>\n'; listType = want; }
+          if (listType !== want) {
+            flushList();
+            // 有序列表若首项不是 1，记住起始序号（编辑时还原用）；首项为 1 不加 start，保持原样
+            var startNum = (want === 'ol' && ol) ? (parseInt(String(ol[0].match(/\d+/)[0]), 10) || 1) : 1;
+            var startAttr = (want === 'ol' && startNum !== 1) ? ' start="' + startNum + '"' : '';
+            html += '<' + want + startAttr + '>\n';
+            listType = want;
+          }
           html += '<li>' + inline((ul || ol)[1]) + '</li>\n';
           continue;
         }
@@ -369,8 +383,67 @@
         para.push(line.trim());
       }
       flushAll();
-      if (inCode) html += '</code></pre>\n';
+      if (inCode) { if (/\n$/.test(html)) html = html.slice(0, -1); html += '</code></pre>\n'; }
       return html.trim();
+    }
+
+    /* ---------- 展示用 HTML → Markdown（编辑时回填文本框） ---------- */
+    // 只处理 mdToHtml 会生成的标签，保证“存回再渲染”往返不丢结构。
+    // 先解码常见实体，避免双重转义；正文里的 < > & 经 mdToHtml 渲染时会重新转义。
+    function htmlToMd(html) {
+      var s = String(html || '').trim();
+      s = s
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ');
+      function inline(text) {
+        return String(text)
+          .replace(/<strong>([\s\S]*?)<\/strong>/g, '**$1**')
+          .replace(/<b>([\s\S]*?)<\/b>/g, '**$1**')
+          .replace(/<em>([\s\S]*?)<\/em>/g, '*$1*')
+          .replace(/<i>([\s\S]*?)<\/i>/g, '*$1*')
+          .replace(/<code>([\s\S]*?)<\/code>/g, '`$1`')
+          .replace(/<a href="([^"]*)">([\s\S]*?)<\/a>/g, '[$2]($1)')
+          .replace(/<img\s+[^>]*alt="([^"]*)"[^>]*src="([^"]*)"[^>]*>/g, '![$1]($2)')
+          .replace(/<img\s+[^>]*src="([^"]*)"[^>]*>/g, '![$1]');
+      }
+      var out = [];
+      var re = /<(h2|h3|h4|p|blockquote|pre|ul|ol)\b([^>]*)>([\s\S]*?)<\/\1>|<hr\s*\/?>/g;
+      var m;
+      while ((m = re.exec(s)) !== null) {
+        var tag = m[1];
+        var attrs = m[2] || '';
+        var inner = m[3] || '';
+        if (!tag) { out.push('---'); continue; }
+        // 注意：mdToHtml 把 “#” 渲染成 <h2>（整体 +1 偏移），这里要反过来
+        if (tag === 'h2') out.push('# ' + inline(inner).trim());
+        else if (tag === 'h3') out.push('## ' + inline(inner).trim());
+        else if (tag === 'h4') out.push('### ' + inline(inner).trim());
+        else if (tag === 'p') out.push(inline(inner).trim());
+        else if (tag === 'hr') out.push('---');
+        else if (tag === 'blockquote') out.push('> ' + inline(inner).replace(/\n+/g, '\n> ').trim());
+        else if (tag === 'pre') {
+          var code = inner.replace(/^<code>([\s\S]*?)<\/code>$/, '$1');
+          out.push('```\n' + code + '\n```');
+        }
+        else if (tag === 'ul') {
+          // 整组合成一条，避免条目间被空行隔开导致各自成 <ul>
+          var uitems = inner.match(/<li>([\s\S]*?)<\/li>/g) || [];
+          out.push(uitems.map(function (it) {
+            var t = it.replace(/^<li>([\s\S]*?)<\/li>$/, '$1');
+            return '- ' + inline(t).trim();
+          }).join('\n'));
+        }
+        else if (tag === 'ol') {
+          var ostart = attrs.match(/start="(\d+)"/);
+          var start = ostart ? parseInt(ostart[1], 10) : 1;
+          var oitems = inner.match(/<li>([\s\S]*?)<\/li>/g) || [];
+          out.push(oitems.map(function (it, idx) {
+            var t = it.replace(/^<li>([\s\S]*?)<\/li>$/, '$1');
+            return (start + idx) + '. ' + inline(t).trim();
+          }).join('\n'));
+        }
+      }
+      return out.join('\n\n').trim() + '\n';
     }
 
     /* ---------- 表单 → 文章对象 ---------- */
@@ -386,7 +459,7 @@
       var md = $('md').value;
       if (!md.trim()) throw new Error('正文不能为空');
 
-      var id = $('f-id').value.trim() || slugify(title);
+      var id = editingId || $('f-id').value.trim() || slugify(title);
       var date = $('f-date').value || new Date().toISOString().slice(0, 10);
       var tags = $('f-tags').value.split(/[,，]/).map(function (t) { return t.trim(); }).filter(Boolean);
       var excerpt = $('f-excerpt').value.trim() ||
@@ -566,16 +639,49 @@
         .then(function (file) {
           var src = fromB64(file.content);
           renderExisting(listIds(src));
+          var entries = parseEntries(src);
+          var target = null;
+          entries.forEach(function (e) { if (e.id === editingId) target = e; });
 
+          // ===== 编辑模式：替换原条目 =====
+          if (editingId) {
+            if (!target) throw new Error('没找到 id 为「' + editingId + '」的文章，可能已被删');
+            // 正文没动 → 直接保留原始 HTML；正文被编辑 → 重新渲染
+            // 两边都先归一换行再比对：textarea 的 API value 会把 \r\n 变成 \n
+            var mdNow = String($('md').value).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            var mdWas = String(editingOriginalMd).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            var newContent = (mdNow === mdWas) ? editingOriginalContent : mdToHtml($('md').value);
+            var updated = {
+              id: editingId,
+              title: entry.title,
+              date: entry.date,
+              tags: entry.tags,
+              excerpt: entry.excerpt,
+              cover: '',
+              readingTime: entry.readingTime,
+              content: newContent
+            };
+            var newSrc = src.slice(0, target.start) + entryToSource(updated) + src.slice(target.end);
+            startTicker('正在提交修改', 15);
+            return api(FILE_PATH, {
+              method: 'PUT',
+              body: JSON.stringify({
+                message: 'post: update ' + editingId,
+                content: toB64(newSrc),
+                sha: file.sha,
+                branch: BRANCH
+              })
+            });
+          }
+
+          // ===== 新增模式：插到数组最前 =====
           if (listIds(src).indexOf(entry.id) !== -1) {
             throw new Error('ID「' + entry.id + '」已存在，换一个再发');
           }
-
           var marker = 'window.posts = [';
           var at = src.indexOf(marker);
           if (at === -1) throw new Error('没找到 window.posts = [，文件结构可能变了');
           var insertAt = at + marker.length;
-
           var newSrc = src.slice(0, insertAt) + '\n' + entryToSource(entry) + ',' + src.slice(insertAt);
 
           startTicker('正在提交', 15);
@@ -590,22 +696,130 @@
           });
         })
         .then(function (res) {
-          var url = 'https://' + REPO_OWNER + '.github.io/' + REPO_NAME + '/post.html?id=' + encodeURIComponent(entry.id);
-          setStatus('发布成功！约 1 分钟后生效：' + url +
-            '（GitHub 提交：' + (res.commit && res.commit.sha ? res.commit.sha.slice(0, 7) : 'ok') + '）', 'ok');
-          // 清空正文，保留元信息方便连续写
-          $('md').value = '';
-          $('f-title').value = '';
-          $('f-excerpt').value = '';
-          $('f-id').value = '';
-          $('f-tags').value = '';
-          renderPreview();
+          if (editingId) {
+            setStatus('已保存修改「' + editingId + '」，约 1 分钟后线上生效。' +
+              '（GitHub 提交：' + (res.commit && res.commit.sha ? res.commit.sha.slice(0, 7) : 'ok') + '）', 'ok');
+            exitEditMode();
+          } else {
+            var url = 'https://' + REPO_OWNER + '.github.io/' + REPO_NAME + '/post.html?id=' + encodeURIComponent(entry.id);
+            setStatus('发布成功！约 1 分钟后生效：' + url +
+              '（GitHub 提交：' + (res.commit && res.commit.sha ? res.commit.sha.slice(0, 7) : 'ok') + '）', 'ok');
+            // 清空正文，保留元信息方便连续写
+            $('md').value = '';
+            $('f-title').value = '';
+            $('f-excerpt').value = '';
+            $('f-id').value = '';
+            $('f-tags').value = '';
+            renderPreview();
+          }
           loadManage();
         })
         .catch(function (e) {
           setStatus('失败：' + friendlyError(e), 'err');
         })
         .then(function () { btn.disabled = false; });
+    }
+
+    /* ---------- 文章编辑：进入 / 退出 ---------- */
+    function fillFormFromEntry(e) {
+      // 先从已解析条目里取出完整字段
+      var full = null;
+      try {
+        var txt = currentSrcCache.slice(e.start, e.end);
+        // 双引号条目可直接 JSON.parse；单引号条目（样例文章）用宽松解析
+        full = parseOneObject(txt);
+      } catch (err) { full = null; }
+      if (!full) return false;
+      $('f-title').value = full.title || '';
+      $('f-date').value = full.date || '';
+      $('f-tags').value = (full.tags || []).join(', ');
+      $('f-id').value = full.id || '';
+      $('f-excerpt').value = full.excerpt || '';
+      $('f-min').value = full.readingTime || 5;
+      editingOriginalContent = full.content || '';
+      editingOriginalMd = htmlToMd(editingOriginalContent);
+      $('md').value = editingOriginalMd;
+      renderPreview();
+      return true;
+    }
+    // 解析单个条目对象：优先 JSON.parse（现代双引号条目），失败再走严谨取字段（单引号 / 反引号模板）
+    // 严谨取字段：跳过字符串（含反引号模板）/ 括号配对，避免把内容里的逗号、换行误判为字段边界
+    function getField(objText, key) {
+      var re = new RegExp('(?:["\']' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '["\']|' + key + ')\\s*:\\s*');
+      var m = re.exec(objText);
+      if (!m) return undefined;
+      var i = m.index + m[0].length;
+      while (i < objText.length && /\s/.test(objText.charAt(i))) i++;
+      var c = objText.charAt(i);
+      if (c === '"' || c === "'" || c === '`') {
+        var end = skipStr(objText, i);
+        // 文件用 CRLF 换行，而 eval 模板字符串会把 \r\n 归一成 \n。
+        // 这里必须同步归一，否则正文里残留的 \r 会让 editingOriginalMd
+        // 与 textarea 取值（浏览器会把 \r\n 归一成 \n）对不上，
+        // 导致"正文未改动就保留原始 HTML"的保护失效、每次保存都重渲染。
+        return objText.slice(i + 1, end - 1).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      }
+      if (c === '[') {
+        var depth = 0, j = i;
+        while (j < objText.length) {
+          var cc = objText.charAt(j);
+          if (cc === '"' || cc === "'" || cc === '`') { j = skipStr(objText, j); continue; }
+          if (cc === '[') depth++;
+          else if (cc === ']') { depth--; if (depth === 0) break; }
+          j++;
+        }
+        var arrText = objText.slice(i + 1, j);
+        return arrText.split(',').map(function (x) {
+          x = x.trim();
+          if (!x) return null;
+          if (x.charAt(0) === '"' || x.charAt(0) === "'" || x.charAt(0) === '`') return x.slice(1, -1);
+          return x;
+        }).filter(function (x) { return x !== null; });
+      }
+      if (c === '{') {
+        return objText.slice(i, matchBrace(objText, i) + 1);
+      }
+      var mm = objText.slice(i).match(/^[^\s,}\]]+/);
+      return mm ? mm[0] : '';
+    }
+    function parseOneObject(txt) {
+      try { return JSON.parse(txt); } catch (e) {}
+      return {
+        id: getField(txt, 'id'),
+        title: getField(txt, 'title'),
+        date: getField(txt, 'date'),
+        excerpt: getField(txt, 'excerpt'),
+        cover: getField(txt, 'cover'),
+        readingTime: parseInt(getField(txt, 'readingTime'), 10) || 5,
+        tags: getField(txt, 'tags') || [],
+        content: getField(txt, 'content')
+      };
+    }
+
+    function editPost(id) {
+      var e = null;
+      currentManageEntries.forEach(function (x) { if (x.id === id) e = x; });
+      if (!e) { setStatus('没找到该文章，请先「刷新列表」', 'err'); return; }
+      if (!fillFormFromEntry(e)) {
+        setStatus('无法解析该文章内容（结构特殊），建议直接在 GitHub 网页改 data/posts.js', 'err');
+        return;
+      }
+      editingId = id;
+      $('f-id').disabled = true;     // 编辑时 ID 锁定，改 ID 等于新文章 + 旧文成孤儿
+      $('btn-publish').textContent = '保存修改';
+      $('btn-post-cancel').hidden = false;
+      setStatus('正在编辑「' + id + '」：改完点「保存修改」。正文已还原成 Markdown，没动正文就保留原格式。', 'info');
+      // 滚到顶部第 2 步，方便直接改
+      try { $('f-title').scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e2) {}
+    }
+
+    function exitEditMode() {
+      editingId = null;
+      editingOriginalContent = '';
+      editingOriginalMd = '';
+      $('f-id').disabled = false;
+      $('btn-publish').textContent = '发布到 GitHub';
+      $('btn-post-cancel').hidden = true;
     }
 
     /* ---------- 源文件切分：把 window.posts = [...] 拆成一个个条目 ---------- */
@@ -670,6 +884,8 @@
     function renderManage(src, source) {
       var box = $('mgr-list');
       var entries = parseEntries(src);
+      currentManageEntries = entries;
+      currentSrcCache = src;
       renderExisting(listIds(src));
       if (!entries.length) {
         box.innerHTML = '<p class="admin__sub">没有解析到文章，文件结构可能有变化。</p>';
@@ -681,15 +897,18 @@
                    '<strong>' + esc(e.title) + '</strong>' +
                    '<span>' + esc(e.date) + ' · <code>' + esc(e.id) + '</code></span>' +
                  '</div>' +
-                 '<button class="btn btn--danger" type="button">删除</button>' +
+                 '<div class="actions">' +
+                   '<button class="btn" type="button" data-act="edit">改</button>' +
+                   '<button class="btn btn--danger" type="button" data-act="del">删除</button>' +
+                 '</div>' +
                '</div>';
       }).join('') +
       '<p class="admin__sub" style="margin-top:12px">共 ' + entries.length + ' 篇（来源：' + esc(source) + '）。' +
-      '删除需要联网调 GitHub API，超时会明确报错，不会一直转圈。</p>';
+      '改 / 删需要联网调 GitHub API，超时会明确报错，不会一直转圈。</p>';
       Array.prototype.forEach.call(box.querySelectorAll('.post-row'), function (row) {
-        row.querySelector('button').onclick = function () {
-          removePost(row.getAttribute('data-id'));
-        };
+        var id = row.getAttribute('data-id');
+        row.querySelector('[data-act="edit"]').onclick = function () { editPost(id); };
+        row.querySelector('[data-act="del"]').onclick = function () { removePost(id); };
       });
     }
 
@@ -756,6 +975,13 @@
     var PHOTO_FILE = 'data/photos.js';
     var PHOTO_DIR  = 'assets/photos';
     var editingSrc = null;   // 编辑中的照片 src（null = 添加模式）
+
+    /* ========== 文章编辑状态 ========== */
+    var editingId = null;            // 编辑中的文章 id（null = 新增模式）
+    var editingOriginalContent = '';  // 原始 content（HTML），正文没改就原样保留
+    var editingOriginalMd = '';       // 原始 content 转成的 Markdown，用于判断是否改动正文
+    var currentManageEntries = [];   // 最近一次文章列表解析结果，供“改”按钮直接取数据
+    var currentSrcCache = '';        // 最近一次文章列表的原始源文本，供编辑时取完整字段
 
     function basename(p) { var i = p.lastIndexOf('/'); return i === -1 ? p : p.slice(i + 1); }
     function dataUrlToB64(d) { return d.slice(d.indexOf(',') + 1); }
@@ -1107,6 +1333,10 @@
       $('btn-publish').addEventListener('click', publish);
       $('btn-copy').addEventListener('click', copySnippet);
       $('btn-load-manage').addEventListener('click', loadManage);
+      $('btn-post-cancel').addEventListener('click', function () {
+        exitEditMode();
+        setStatus('已取消编辑，表单回到「新增」模式。', 'info');
+      });
 
       $('btn-photo-refresh').addEventListener('click', loadPhotoMgr);
       $('btn-photo-save').addEventListener('click', savePhoto);
@@ -1118,6 +1348,7 @@
         ['f-title', 'f-excerpt', 'f-id', 'f-tags', 'md'].forEach(function (id) { $(id).value = ''; });
         $('f-date').value = new Date().toISOString().slice(0, 10);
         renderPreview();
+        if (editingId) exitEditMode();
         setStatus('已清空', 'info');
       });
 
