@@ -29,6 +29,7 @@ window.siteConfig = {
   nav: [
     { label: '首页',     href: 'index.html' },
     { label: '文章',     href: 'posts.html' },
+    { label: '照片',     href: 'photos.html' },
     { label: '关于我',   href: 'about.html' }
   ],
 

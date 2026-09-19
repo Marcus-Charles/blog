@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>照片 · Marcus's blog</title>
+  <meta name="description" content="一些随手拍的照片。">
+
+  <meta name="theme-color" content="#fdfdfc">
+  <meta name="color-scheme" content="light dark">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="照片 · Marcus's blog">
+  <meta property="og:description" content="一些随手拍的照片。">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6f4e'/%3E%3Ctext x='16' y='22' font-size='18' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'%3E%E7%99%BD%3C/text%3E%3C/svg%3E">
+
+  <link rel="stylesheet" href="css/style.css">
+
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('blog-theme');
+        var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <header id="site-header"></header>
+
+  <main id="main">
+    <section class="container container--wide" style="padding-top:56px">
+      <div class="page-header" style="padding-top:0">
+        <h1 class="page-header__title">照片</h1>
+        <p class="page-header__lead" id="photo-count">加载中…</p>
+      </div>
+
+      <!-- 照片墙：js/photos.js 注入 -->
+      <ul class="photo-grid" id="photo-grid"></ul>
+
+      <p class="photo-empty" id="photo-empty" hidden>
+        还没有照片。把图片放进 <code>assets/photos/</code>，再到 <code>data/photos.js</code> 里加一条记录。
+      </p>
+    </section>
+  </main>
+
+  <footer id="site-footer"></footer>
+
+  <!-- 大图查看器：默认隐藏，点照片时由 js/photos.js 打开 -->
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="查看大图" hidden>
+    <button class="lightbox__close" id="lightbox-close" type="button" aria-label="关闭">&#10005;</button>
+    <button class="lightbox__nav lightbox__nav--prev" id="lightbox-prev" type="button" aria-label="上一张">&#8249;</button>
+    <button class="lightbox__nav lightbox__nav--next" id="lightbox-next" type="button" aria-label="下一张">&#8250;</button>
+    <figure class="lightbox__figure">
+      <img id="lightbox-img" src="" alt="">
+      <figcaption id="lightbox-caption"></figcaption>
+    </figure>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="data/photos.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/photos.js"></script>
+</body>
+</html>
