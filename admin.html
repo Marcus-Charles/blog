@@ -119,6 +119,7 @@
       <div class="actions">
         <button class="btn" id="btn-save-token" type="button">记住这台电脑</button>
         <button class="btn" id="btn-clear-token" type="button">清除</button>
+        <button class="btn" id="btn-test" type="button">测试网络连通</button>
         <span class="existing" id="token-status"></span>
       </div>
       <details class="tips">
@@ -160,7 +161,8 @@
       </div>
       <div class="actions">
         <button class="btn btn--primary" id="btn-publish" type="button">发布到 GitHub</button>
-        <button class="btn" id="btn-copy" type="button">复制代码片段（手动粘贴用）</button>
+        <button class="btn" id="btn-copy" type="button">复制代码片段</button>
+        <button class="btn" id="btn-download" type="button">下载片段文件</button>
         <button class="btn" id="btn-reset" type="button">清空</button>
       </div>
       <div class="status" id="status"></div>
@@ -448,7 +450,19 @@
           renderPreview();
         })
         .catch(function (e) {
-          setStatus('失败：' + e.message, 'err');
+          var msg = (e && e.message) ? e.message : String(e);
+          if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) {
+            msg = '网络层面失败（Failed to fetch）：本机浏览器连不上 api.github.com。' +
+                  '常见原因是国内网络拦截、代理或公司防火墙。' +
+                  '→ 点上面「测试网络连通」确认；确认不通就用「复制代码片段」或「下载片段文件」手动发布。';
+          } else if (/401|Bad credentials/i.test(msg)) {
+            msg = 'Token 无效或已过期：请重新生成并粘到上面的输入框。';
+          } else if (/403|Resource not accessible/i.test(msg)) {
+            msg = 'Token 权限不足：需要勾选这个仓库的 Contents: Read and write。';
+          } else if (/404/i.test(msg)) {
+            msg = '找不到文件或仓库：检查 Token 是否能访问该仓库。';
+          }
+          setStatus('失败：' + msg, 'err');
         })
         .then(function () { btn.disabled = false; });
     }
@@ -492,6 +506,41 @@
         if (!$('f-id').value.trim() && $('f-title').value.trim()) {
           $('f-id').value = slugify($('f-title').value);
         }
+      });
+
+      // 连通性自检：不带 token，只测能否访问 api.github.com
+      $('btn-test').addEventListener('click', function () {
+        var b = $('btn-test');
+        b.disabled = true;
+        setStatus('正在测试 api.github.com …', 'info');
+        var started = Date.now();
+        fetch('https://api.github.com', { headers: { 'Accept': 'application/vnd.github+json' } })
+          .then(function (r) {
+            return r.json().then(function () {
+              setStatus('连通正常（' + (Date.now() - started) + 'ms）。若发布仍失败，多半是 Token 权限或有效期问题。', 'ok');
+            });
+          })
+          .catch(function (e) {
+            setStatus('连不上 api.github.com：' + e.message +
+              ' —— 本机网络/代理拦截了请求，请改用「复制代码片段」或「下载片段文件」发布。', 'err');
+          })
+          .then(function () { b.disabled = false; });
+      });
+
+      // 下载片段
+      $('btn-download').addEventListener('click', function () {
+        try {
+          var text = entryToSource(buildEntry()) + ',';
+          var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = ($('f-id').value.trim() || 'post') + '-snippet.txt';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(a.href);
+          setStatus('已下载片段文件，把它粘到 data/posts.js 数组最前面即可', 'ok');
+        } catch (e) { setStatus(e.message, 'err'); }
       });
 
       $('btn-publish').addEventListener('click', publish);
